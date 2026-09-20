@@ -17,9 +17,19 @@ const questions = [
       "yes. message content, reasoning, chat titles, and custom instructions are encrypted at rest. a database leak or backup exposes ciphertext, not conversations.",
   },
   {
+    question: "do you track ad clicks?",
+    answer:
+      "if you arrive from an ad, its click id is held in your browser until you create an account, then reported once to confirm the click led to a signup. no account number is included, and nothing keeps the click id linked to your account afterward. no ad script or cookie runs on the site.",
+  },
+  {
     question: "how does billing work?",
     answer:
       "pay-as-you-go. 100 credits = $1.00. each message costs the model's token price plus a 40% markup that covers payment fees, refunds on cancelled replies, and hosting. you are billed for the tokens actually used and unused credit never expires. see the pricing page for per-model rates.",
+  },
+  {
+    question: "what payment methods do you accept?",
+    answer:
+      "card, or monero through a self-hosted btcpay server with no processor in the middle. no bank or card details reach us either way.",
   },
   {
     question: "which models can i use?",
