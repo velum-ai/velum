@@ -1,0 +1,32 @@
+# The app only. Database is external (set DATABASE_URL in .env). Put a reverse
+# proxy (TLS, security headers can stay in next.config or move to the proxy) in
+# front of 127.0.0.1:8293.
+#
+# Migrations: run `npm run db:migrate` from your machine, or
+# `docker compose run --rm --profile migrate migrate`.
+
+services:
+  migrate:
+    build:
+      context: .
+      target: migrator
+    env_file: [.env]
+    profiles: ["migrate"]
+
+  velum:
+    build:
+      context: .
+      target: runner
+    container_name: velum
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8293:3000"
+    env_file: [.env]
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - velum-data:/data # stored chat images
+    stop_grace_period: 20s
+
+volumes:
+  velum-data:

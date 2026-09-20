@@ -1,0 +1,144 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  // App runtime: Supabase "Transaction" pooler (port 6543), which multiplexes
+  // so many workers share few connections. Migrations need a real session, so
+  // they use DIRECT_URL (the "Session" pooler, port 5432). See README.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// A 16-digit anonymous number owning credits and chats - the only identity.
+model Account {
+  number       String        @id
+  credits      Int
+  /// Optional custom instructions, prepended as the system message on every chat.
+  systemPrompt String?
+  /// Model ids this account may pick, chosen from pricing.js's curated catalogue.
+  /// Empty means "use the catalogue's defaults" (see pricing.defaultModelIds).
+  enabledModels String[]     @default([])
+  createdAt    DateTime      @default(now())
+  chats        Chat[]
+  reservations Reservation[]
+  payments     Payment[]
+  attachments  Attachment[]
+}
+
+model Chat {
+  id          String       @id @default(uuid())
+  account     Account      @relation(fields: [accountId], references: [number], onDelete: Cascade)
+  accountId   String
+  title       String
+  spent       Int          @default(0)
+  pinned      Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  messages    Message[]
+  attachments Attachment[]
+
+  @@index([accountId, updatedAt])
+}
+
+/// One turn. `id` is monotonic, so ordering by it is chronological.
+model Message {
+  id          Int          @id @default(autoincrement())
+  chat        Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId      String
+  role        String
+  content     String
+  /// Model id and credits spent, on assistant turns only.
+  model       String?
+  cost        Int?
+  /// Reasoning-summary text, when the provider streams one.
+  reasoning   String?
+  createdAt   DateTime     @default(now())
+  attachments Attachment[]
+
+  @@index([chatId, id])
+}
+
+/// An image, stored on disk at DATA_DIR/attachments/<id>. `kind` is "upload"
+/// (user attached) or "generated" (image model). Row cascades with the chat;
+/// the file is removed by the delete path and, as a backstop, the sweep.
+model Attachment {
+  id        String   @id @default(uuid())
+  account   Account  @relation(fields: [accountId], references: [number], onDelete: Cascade)
+  accountId String
+  chat      Chat?    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId    String?
+  message   Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId Int?
+  kind      String
+  mime      String
+  width     Int?
+  height    Int?
+  bytes     Int
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([chatId])
+}
+
+enum ReservationStatus {
+  PENDING
+  SETTLED
+  ABANDONED
+}
+
+/// Worst-case credits held before an upstream call. A row left PENDING past the
+/// sweep TTL means the request died mid-flight; the sweep refunds it.
+model Reservation {
+  id        String            @id @default(uuid())
+  account   Account           @relation(fields: [accountId], references: [number], onDelete: Cascade)
+  accountId String
+  amount    Int
+  status    ReservationStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  settledAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+/// Fixed-window rate-limit bucket. Durable and shared across app instances.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+enum PaymentMethod {
+  DODO
+  BTCPAY
+}
+
+/// A credit top-up, either a Dodo checkout session (card) or a BTCPay invoice
+/// (Monero). Moved to PAID (and the credits granted) exactly once, by
+/// whichever of the return-url verify or the webhook wins the race. `id`
+/// doubles as the `ref` handed to Dodo in checkout metadata; BTCPay instead
+/// looks the row up by `btcpayInvoiceId`, known before the row is created.
+model Payment {
+  id              String        @id @default(uuid())
+  account         Account       @relation(fields: [accountId], references: [number], onDelete: Cascade)
+  accountId       String
+  method          PaymentMethod @default(DODO)
+  dodoCheckoutId  String?       @unique
+  dodoPaymentId   String?       @unique
+  btcpayInvoiceId String?       @unique
+  amountCents     Int // USD cents
+  credits         Int
+  status          PaymentStatus @default(CREATED)
+  createdAt       DateTime      @default(now())
+  paidAt          DateTime?
+
+  @@index([accountId, createdAt])
+}

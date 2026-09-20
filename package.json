@@ -1,0 +1,45 @@
+{
+  "name": "velum",
+  "version": "0.1.0",
+  "description": "Prepaid, identity-free AI chat. No email, phone, or name, just a numbered account.",
+  "homepage": "https://velum.run",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/velum-ai/velum.git"
+  },
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "prisma generate && next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "node --import ./scripts/loader.mjs scripts/test.js",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:sql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/full-schema.sql",
+    "db:wipe": "node --import ./scripts/loader.mjs scripts/wipe-db.js",
+    "db:encrypt-existing": "node --import ./scripts/loader.mjs scripts/encrypt-existing.js",
+    "create-account": "node --import ./scripts/loader.mjs scripts/create-account.js",
+    "grant-credit": "node --import ./scripts/loader.mjs scripts/grant-credit.js",
+    "delete-account": "node --import ./scripts/loader.mjs scripts/delete-account.js",
+    "sync-models": "node --import ./scripts/loader.mjs scripts/sync-models.js",
+    "import:legacy": "node --import ./scripts/loader.mjs scripts/import-legacy-json.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "next": "16.3.5",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "prisma": "6.19.3",
+    "tailwindcss": "^4"
+  }
+}

@@ -1,0 +1,259 @@
+@import "tailwindcss";
+
+/* Light is the default palette. Dark is applied either by the OS preference
+   (when the user has not chosen) or by data-theme="dark" on <html> (the
+   toggle, and the no-flash script in the root layout). Keep the two dark
+   blocks below in sync. */
+@theme {
+  --color-background: #ffffff;
+  --color-surface: #f7f7f7;
+  --color-surface-2: #ededed;
+  --color-foreground: #171717;
+  --color-muted: #565656;
+  --color-faint: #8a8a8a;
+  --color-border: #e4e4e4;
+  --color-border-strong: #d0d0d0;
+
+  --font-sans: var(--font-geist-mono); /* brand / marketing - unchanged */
+  --font-mono: var(--font-geist-mono);
+  --font-chat: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  /* deliberately restrained: softened square, not pill-round */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-background: #0a0a0a;
+    --color-surface: #161616;
+    --color-surface-2: #1f1f1f;
+    --color-foreground: #ededed;
+    --color-muted: #9a9a9a;
+    --color-faint: #6a6a6a;
+    --color-border: #2a2a2a;
+    --color-border-strong: #3a3a3a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-background: #0a0a0a;
+  --color-surface: #161616;
+  --color-surface-2: #1f1f1f;
+  --color-foreground: #ededed;
+  --color-muted: #9a9a9a;
+  --color-faint: #6a6a6a;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  ::selection {
+    background: var(--color-foreground);
+    color: var(--color-background);
+  }
+
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-foreground) 45%, transparent);
+    border-radius: 4px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: msg-in 0.28s cubic-bezier(0.21, 0.99, 0.5, 1) both;
+  }
+}
+
+/* new-message entrance */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* "assistant is thinking" - three bouncing dots */
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.5rem;
+}
+.thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-muted);
+  animation: thinking 1.2s ease-in-out infinite;
+}
+.thinking span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.thinking span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes thinking {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* loading skeleton: soft block + a slow sheen sweeping across it */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-2);
+  border-radius: 4px;
+}
+.sk::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-foreground) 7%, transparent),
+    transparent
+  );
+  animation: sk 1.5s ease-in-out infinite;
+}
+@keyframes sk {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+  }
+}
+
+/* markdown in assistant replies */
+.md-prose {
+  font-family: var(--font-chat);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.md-prose > *:first-child {
+  margin-top: 0;
+}
+.md-prose > *:last-child {
+  margin-bottom: 0;
+}
+.md-pre {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 0.85rem 1rem;
+  margin: 0.7rem 0;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  line-height: 1.6;
+}
+.md-pre code {
+  font-family: inherit;
+}
+
+/* fenced code block with a header bar (language + copy) */
+.md-cb {
+  margin: 0.7rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.md-cb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.55rem 0.3rem 0.8rem;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+.md-cb-lang {
+  color: var(--color-faint);
+}
+.md-copy {
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+.md-copy:hover {
+  color: var(--color-foreground);
+  background: rgba(255, 255, 255, 0.06);
+}
+.md-cb .md-pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.md-code {
+  background: var(--color-surface-2);
+  border-radius: 3px;
+  padding: 0.08rem 0.34rem;
+  font-size: 0.88em;
+  font-family: var(--font-mono);
+}
+.md-h {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1rem 0 0.4rem;
+}
+.md-ul {
+  list-style: disc;
+  padding-left: 1.35rem;
+  margin: 0.45rem 0;
+}
+.md-ul li {
+  margin: 0.15rem 0;
+}
