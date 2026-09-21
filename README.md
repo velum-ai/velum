@@ -151,15 +151,6 @@ all four are set. The invoice defaults to Monero
 method configured, most simply by pointing it at a remote Monero node instead
 of running a full node yourself.
 
-## Ad conversion reporting (optional)
-
-Server-to-server only, no script or cookie runs in the browser.
-`AdClickCapture` stores an ad's `twclid` from the landing URL in
-`localStorage`; on account creation it's sent once to
-`src/lib/xConversions.js`, which reports the conversion to X's Conversions
-API and discards it. Set `X_PIXEL_ID`, `X_API_KEY`, `X_EVENT_ID` to enable;
-leave any unset to report nothing.
-
 ## Models, pricing and billing
 
 Chat runs on OpenRouter. Set `OPENROUTER_API_KEY`. `src/lib/pricing.js` holds

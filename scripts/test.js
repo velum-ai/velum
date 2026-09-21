@@ -14,6 +14,7 @@ const FILES = [
   "btcpay.js",
   "crypto.js",
   "xConversions.js",
+  "redditConversions.js",
 ];
 
 let failed = 0;

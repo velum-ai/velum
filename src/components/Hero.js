@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSignedIn } from "@/lib/useSignedIn";
+import { site } from "@/config/site";
 
 const primary =
   "group inline-flex items-center gap-2 rounded-md border border-foreground bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-background hover:text-foreground sm:text-base";
@@ -44,6 +45,15 @@ export default function Hero() {
             </>
           )}
         </div>
+
+        {site.github && (
+          <Link
+            href={site.github}
+            className="text-sm text-faint transition-colors hover:text-foreground"
+          >
+            open source, verify it yourself &rarr;
+          </Link>
+        )}
       </div>
     </section>
   );
