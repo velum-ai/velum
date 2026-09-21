@@ -58,15 +58,15 @@ npm run lint
 ## Self-hosting
 
 ```bash
-cp .env.production.example .env   # fill it in, see notes in the file
-npm run db:migrate                # against the production DATABASE_URL
+cp .env.example .env   # fill it in, see the "production" notes in the file
+npm run db:migrate     # against the production DATABASE_URL
 docker compose up -d --build
 ```
 
-`.env.production.example` lists exactly what a live deploy needs: the same
-`DATABASE_URL` / `DIRECT_URL` / `OPENROUTER_API_KEY` / `APP_SECRET` as dev,
-plus `NEXT_PUBLIC_SITE_URL`, `DODO_MODE=live`, and the three Dodo **live**
-dashboard values. See Database below for the pooler split.
+`.env.example` covers both dev and production in one file: most values are
+shared, and the handful that differ (`NEXT_PUBLIC_SITE_URL`, `DATA_DIR`,
+`DODO_MODE` and its **live** dashboard values) are called out inline where
+they appear. See Database below for the pooler split.
 
 Compose runs `velum` only (non-root, healthchecked on `/api/health`, bound to
 `127.0.0.1:8293`). Put your own reverse proxy in front for TLS; the database
