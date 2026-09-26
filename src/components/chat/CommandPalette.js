@@ -15,6 +15,8 @@ export default function CommandPalette({
   onNewChat,
   onToggleEphemeral,
   onOpenAccount,
+  scopeProjectId = null,
+  scopeLabel = null,
 }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState([]);
@@ -44,25 +46,33 @@ export default function CommandPalette({
 
   const items = useMemo(() => {
     const term = q.trim().toLowerCase();
-    const actions = [
-      { key: "new", label: "new chat", hint: "command", run: onNewChat },
-      { key: "temp", label: "toggle temporary chat", hint: "command", run: onToggleEphemeral },
-      { key: "acct", label: "open account", hint: "command", run: onOpenAccount },
-    ].filter((a) => !term || a.label.includes(term));
+    const scopedChats = scopeProjectId ? chats.filter((c) => c.projectId === scopeProjectId) : chats;
+    const scopedChatIds = scopeProjectId ? new Set(scopedChats.map((c) => c.id)) : null;
 
-    const titles = (term ? chats.filter((c) => c.title.toLowerCase().includes(term)) : chats)
+    const actions = scopeProjectId
+      ? [{ key: "new", label: `new chat in ${scopeLabel}`, hint: "command", run: onNewChat }]
+      : [
+          { key: "new", label: "new chat", hint: "command", run: onNewChat },
+          { key: "temp", label: "toggle temporary chat", hint: "command", run: onToggleEphemeral },
+          { key: "acct", label: "open account", hint: "command", run: onOpenAccount },
+        ];
+    const filteredActions = actions.filter((a) => !term || a.label.includes(term));
+
+    const titles = (term ? scopedChats.filter((c) => c.title.toLowerCase().includes(term)) : scopedChats)
       .slice(0, term ? 8 : 6)
       .map((c) => ({ key: `c:${c.id}`, label: c.title, hint: "chat", run: () => onSelectChat(c) }));
 
-    const bodies = (term.length >= 2 ? hits : []).map((h) => ({
-      key: `m:${h.messageId}`,
-      label: h.title,
-      hint: h.snippet,
-      run: () => onSelectChat({ id: h.chatId, title: h.title }),
-    }));
+    const bodies = (term.length >= 2 ? hits : [])
+      .filter((h) => !scopedChatIds || scopedChatIds.has(h.chatId))
+      .map((h) => ({
+        key: `m:${h.messageId}`,
+        label: h.title,
+        hint: h.snippet,
+        run: () => onSelectChat({ id: h.chatId, title: h.title }),
+      }));
 
-    return [...actions, ...titles, ...bodies];
-  }, [q, chats, hits, onNewChat, onToggleEphemeral, onOpenAccount, onSelectChat]);
+    return [...filteredActions, ...titles, ...bodies];
+  }, [q, chats, hits, onNewChat, onToggleEphemeral, onOpenAccount, onSelectChat, scopeProjectId, scopeLabel]);
 
   if (!open) return null;
 
@@ -108,7 +118,11 @@ export default function CommandPalette({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKey}
-            placeholder="search chats and messages, or run a command"
+            placeholder={
+              scopeProjectId
+                ? `search in ${scopeLabel}…`
+                : "search chats and messages, or run a command"
+            }
             className="w-full bg-transparent py-3 font-chat text-sm outline-none placeholder:text-faint"
           />
         </div>

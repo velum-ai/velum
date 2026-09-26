@@ -23,24 +23,42 @@ model Account {
   enabledModels String[]     @default([])
   createdAt    DateTime      @default(now())
   chats        Chat[]
+  projects     Project[]
   reservations Reservation[]
   payments     Payment[]
   attachments  Attachment[]
+}
+
+/// A named group of chats, purely organizational - nothing else depends on it.
+model Project {
+  id        String   @id @default(uuid())
+  account   Account  @relation(fields: [accountId], references: [number], onDelete: Cascade)
+  accountId String
+  name      String
+  createdAt DateTime @default(now())
+  chats     Chat[]
+
+  @@index([accountId])
 }
 
 model Chat {
   id          String       @id @default(uuid())
   account     Account      @relation(fields: [accountId], references: [number], onDelete: Cascade)
   accountId   String
+  /// Optional; deleting the project ungroups its chats rather than deleting them.
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId   String?
   title       String
   spent       Int          @default(0)
   pinned      Boolean      @default(false)
+  shared      Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   messages    Message[]
   attachments Attachment[]
 
   @@index([accountId, updatedAt])
+  @@index([projectId])
 }
 
 /// One turn. `id` is monotonic, so ordering by it is chronological.

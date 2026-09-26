@@ -10,7 +10,7 @@ import { logError } from "@/lib/logger";
 import { site } from "@/config/site";
 
 
-// Open a hosted checkout for a credit top-up: Dodo (card) or BTCPay (Monero).
+// Open a hosted checkout for a credit top-up: Dodo (card, wallets, bank debit, etc.) or BTCPay (Monero).
 // Either way we record a pending Payment row before redirecting the browser;
 // the webhook / return-url verify grants the credits on success.
 export async function POST(req) {

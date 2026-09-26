@@ -12,6 +12,8 @@ import {
   PinIcon,
   SignOutIcon,
   UserIcon,
+  FolderIcon,
+  ChevronDownIcon,
 } from "@/components/chat/icons";
 
 const MENU_HEIGHT = 108; // three rows - used to decide whether to flip upward
@@ -40,6 +42,7 @@ function ChatListSkeleton() {
 
 export default function Sidebar({
   chats,
+  projects = [],
   loading,
   activeChatId,
   editingChatId,
@@ -52,6 +55,14 @@ export default function Sidebar({
   onRenameChat,
   onRemoveChat,
   onTogglePin,
+  onCreateProject,
+  onRenameProject,
+  onRemoveProject,
+  onMoveChatToProject,
+  onNewChatInProject,
+  onSearchProject,
+  width,
+  onResize,
   account,
   credits,
   onSignOut,
@@ -62,7 +73,49 @@ export default function Sidebar({
   onCloseMobile,
 }) {
   const [menuChat, setMenuChat] = useState(null);
+  const [moveChat, setMoveChat] = useState(null);
+  const [collapsed, setCollapsed] = useState({});
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [projectMenu, setProjectMenu] = useState(null);
+  const [draggingChatId, setDraggingChatId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
   const menuButtonRefs = useRef({});
+  const projectMenuButtonRefs = useRef({});
+
+  const dragProps = (chat) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      setDraggingChatId(chat.id);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", chat.id);
+    },
+    onDragEnd: () => {
+      setDraggingChatId(null);
+      setDropTarget(null);
+    },
+  });
+
+  const dropProps = (targetId, onDrop = onMoveChatToProject) => ({
+    onDragOver: (e) => {
+      if (!draggingChatId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (dropTarget !== targetId) setDropTarget(targetId);
+    },
+    onDragLeave: () => setDropTarget((prev) => (prev === targetId ? null : prev)),
+    onDrop: (e) => {
+      e.preventDefault();
+      const chatId = e.dataTransfer.getData("text/plain") || draggingChatId;
+      setDraggingChatId(null);
+      setDropTarget(null);
+      if (chatId) onDrop(chatId, targetId);
+    },
+  });
+
+  const pinDropProps = dropProps("pin", (chatId) => onTogglePin(chatId, true));
 
   const openMenu = (chat) => {
     const btn = menuButtonRefs.current[chat.id];
@@ -85,6 +138,28 @@ export default function Sidebar({
     return () => window.removeEventListener("resize", closeMenu);
   }, [menuChat]);
 
+  const openProjectMenu = (project) => {
+    const btn = projectMenuButtonRefs.current[project.id];
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const right = window.innerWidth - rect.right;
+    setProjectMenu({ id: project.id, right, top: rect.bottom + 4 });
+  };
+  const closeProjectMenu = () => setProjectMenu(null);
+
+  const submitNewProject = () => {
+    const name = newProjectName.trim();
+    setCreatingProject(false);
+    setNewProjectName("");
+    if (name) onCreateProject?.(name);
+  };
+
+  const submitProjectRename = (projectId) => {
+    const name = editProjectName.trim();
+    setEditingProjectId(null);
+    if (name) onRenameProject?.(projectId, name);
+  };
+
   const pickChat = (chat) => {
     onSelectChat(chat);
     onCloseMobile?.();
@@ -97,71 +172,197 @@ export default function Sidebar({
 
   const menuTarget = chats.find((c) => c.id === menuChat?.id);
 
+  const renderChatRow = (chat) => {
+    const active = chat.id === activeChatId;
+    return (
+      <div
+        key={chat.id}
+        {...dragProps(chat)}
+        className={`group flex items-center rounded-md transition-colors ${
+          active ? "bg-surface" : "hover:bg-surface"
+        } ${draggingChatId === chat.id ? "opacity-40" : ""}`}
+      >
+        {editingChatId === chat.id ? (
+          <input
+            autoFocus
+            value={editTitle}
+            onChange={(e) => onEditTitleChange(e.target.value)}
+            onBlur={() => onRenameChat(chat.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onRenameChat(chat.id);
+              if (e.key === "Escape") onCancelRename();
+            }}
+            className="w-full rounded-md bg-surface-2 px-3 py-2 text-sm outline-none"
+          />
+        ) : (
+          <>
+            <button
+              onClick={() => pickChat(chat)}
+              className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-2 text-left"
+            >
+              {chat.pinned && (
+                <span className="shrink-0 text-faint">
+                  <PinIcon />
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span
+                  className={`block truncate text-sm ${
+                    active ? "text-foreground" : "text-muted"
+                  }`}
+                >
+                  {chat.title}
+                </span>
+                <span className="block text-[11px] tabular-nums text-faint">
+                  {(chat.spent || 0).toLocaleString()} cr
+                </span>
+              </span>
+            </button>
+            <button
+              ref={(el) => (menuButtonRefs.current[chat.id] = el)}
+              onClick={() =>
+                menuChat?.id === chat.id ? closeMenu() : openMenu(chat)
+              }
+              title="options"
+              className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover:opacity-100"
+            >
+              <MoreIcon />
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const sectionLabel = "px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-faint";
+
+  const pinned = chats.filter((c) => c.pinned);
+  const ungrouped = chats.filter((c) => !c.projectId && !c.pinned);
+
   const renderChatList = () => (
-    <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-      {chats.length === 0 && (
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-3">
+      {chats.length === 0 && !projects.length && (
         <p className="px-2 py-3 text-xs text-faint">no chats yet</p>
       )}
-      {chats.map((chat) => {
-        const active = chat.id === activeChatId;
-        return (
-          <div
-            key={chat.id}
-            className={`group flex items-center rounded-md transition-colors ${
-              active ? "bg-surface" : "hover:bg-surface"
+
+      {(pinned.length > 0 || draggingChatId) && (
+        <div>
+          <p
+            {...pinDropProps}
+            className={`${sectionLabel} rounded-md transition-colors ${
+              dropTarget === "pin" ? "bg-surface-2 ring-1 ring-border-strong" : ""
             }`}
           >
-            {editingChatId === chat.id ? (
-              <input
-                autoFocus
-                value={editTitle}
-                onChange={(e) => onEditTitleChange(e.target.value)}
-                onBlur={() => onRenameChat(chat.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onRenameChat(chat.id);
-                  if (e.key === "Escape") onCancelRename();
-                }}
-                className="w-full rounded-md bg-surface-2 px-3 py-2 text-sm outline-none"
-              />
+            pinned
+          </p>
+          <div className="space-y-0.5">
+            {pinned.length > 0 ? (
+              pinned.map(renderChatRow)
             ) : (
-              <>
-                <button
-                  onClick={() => pickChat(chat)}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-2 text-left"
-                >
-                  {chat.pinned && (
-                    <span className="shrink-0 text-faint">
-                      <PinIcon />
+              <p className="px-3 py-1.5 text-xs text-faint">drop a chat here to pin it</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {projects.map((project) => {
+        const projectChats = chats.filter((c) => c.projectId === project.id && !c.pinned);
+        const isCollapsed = collapsed[project.id];
+        const isDropTarget = dropTarget === project.id;
+        return (
+          <div key={project.id}>
+            <div
+              {...dropProps(project.id)}
+              className={`group/proj flex items-center rounded-md transition-colors ${
+                isDropTarget ? "bg-surface-2 ring-1 ring-border-strong" : ""
+              }`}
+            >
+              {editingProjectId === project.id ? (
+                <input
+                  autoFocus
+                  value={editProjectName}
+                  onChange={(e) => setEditProjectName(e.target.value)}
+                  onBlur={() => submitProjectRename(project.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitProjectRename(project.id);
+                    if (e.key === "Escape") setEditingProjectId(null);
+                  }}
+                  className="w-full rounded-md bg-surface-2 px-3 py-1.5 text-xs outline-none"
+                />
+              ) : (
+                <>
+                  <button
+                    onClick={() =>
+                      setCollapsed((prev) => ({ ...prev, [project.id]: !prev[project.id] }))
+                    }
+                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-faint transition-colors hover:text-foreground"
+                  >
+                    <FolderIcon />
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide">
+                      {project.name}
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`block truncate text-sm ${
-                        active ? "text-foreground" : "text-muted"
-                      }`}
-                    >
-                      {chat.title}
+                    <span className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>
+                      <ChevronDownIcon />
                     </span>
-                    <span className="block text-[11px] tabular-nums text-faint">
-                      {(chat.spent || 0).toLocaleString()} cr
-                    </span>
-                  </span>
-                </button>
-                <button
-                  ref={(el) => (menuButtonRefs.current[chat.id] = el)}
-                  onClick={() =>
-                    menuChat?.id === chat.id ? closeMenu() : openMenu(chat)
-                  }
-                  title="options"
-                  className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-faint opacity-0 transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-                >
-                  <MoreIcon />
-                </button>
-              </>
+                  </button>
+                  <button
+                    onClick={() => onSearchProject?.(project)}
+                    title="search this project"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
+                  >
+                    <SearchIcon />
+                  </button>
+                  <button
+                    onClick={() => onNewChatInProject?.(project.id)}
+                    title="new chat in this project"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
+                  >
+                    <PlusIcon />
+                  </button>
+                  <button
+                    ref={(el) => (projectMenuButtonRefs.current[project.id] = el)}
+                    onClick={() =>
+                      projectMenu?.id === project.id ? closeProjectMenu() : openProjectMenu(project)
+                    }
+                    title="project options"
+                    className="mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
+                  >
+                    <MoreIcon />
+                  </button>
+                </>
+              )}
+            </div>
+            {!isCollapsed && (
+              <div className="space-y-0.5">
+                {projectChats.length === 0 ? (
+                  <p className="px-3 py-1.5 text-xs text-faint">empty</p>
+                ) : (
+                  projectChats.map(renderChatRow)
+                )}
+              </div>
             )}
           </div>
         );
       })}
+
+      {ungrouped.length > 0 && (
+        <div>
+          {(pinned.length > 0 || projects.length > 0) && (
+            <p
+              {...dropProps("recents", (chatId) => {
+                onMoveChatToProject(chatId, null);
+                onTogglePin(chatId, false);
+              })}
+              className={`${sectionLabel} rounded-md transition-colors ${
+                dropTarget === "recents" ? "bg-surface-2 ring-1 ring-border-strong" : ""
+              }`}
+            >
+              recents
+            </p>
+          )}
+          <div className="space-y-0.5">{ungrouped.map(renderChatRow)}</div>
+        </div>
+      )}
     </div>
   );
 
@@ -200,6 +401,31 @@ export default function Sidebar({
           <PlusIcon />
           new chat
         </button>
+        {creatingProject ? (
+          <input
+            autoFocus
+            value={newProjectName}
+            onChange={(e) => setNewProjectName(e.target.value)}
+            onBlur={submitNewProject}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitNewProject();
+              if (e.key === "Escape") {
+                setCreatingProject(false);
+                setNewProjectName("");
+              }
+            }}
+            placeholder="project name"
+            className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none"
+          />
+        ) : (
+          <button
+            onClick={() => setCreatingProject(true)}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-faint transition-colors hover:text-foreground"
+          >
+            <FolderIcon />
+            new project
+          </button>
+        )}
       </div>
       {loading && chats.length === 0 ? <ChatListSkeleton /> : renderChatList()}
 
@@ -250,14 +476,38 @@ export default function Sidebar({
     </>
   );
 
+  const startResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    const onMove = (ev) => {
+      const next = Math.min(420, Math.max(200, startWidth + (ev.clientX - startX)));
+      onResize?.(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
   return (
     <>
       <aside
-        className={`hidden w-64 shrink-0 flex-col border-r border-border ${
+        style={{ width: desktopHidden ? undefined : width }}
+        className={`relative hidden shrink-0 flex-col border-r border-border ${
           desktopHidden ? "" : "md:flex"
         }`}
       >
         {renderPanel()}
+        {!desktopHidden && (
+          <div
+            onMouseDown={startResize}
+            title="drag to resize"
+            className="absolute inset-y-0 -right-0.5 z-10 hidden w-1 cursor-col-resize md:block hover:bg-border-strong"
+          />
+        )}
       </aside>
 
       {mobileOpen &&
@@ -313,10 +563,91 @@ export default function Sidebar({
               >
                 rename
               </button>
+              {projects.length > 0 && (
+                <button
+                  onClick={() => {
+                    setMoveChat({ id: menuChat.id, right: menuChat.right, top: menuChat.top, bottom: menuChat.bottom });
+                    closeMenu();
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  move to project
+                </button>
+              )}
               <button
                 onClick={() => {
                   onRemoveChat(menuChat.id);
                   closeMenu();
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                delete
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+
+      {moveChat &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setMoveChat(null)} />
+            <div
+              style={{
+                right: moveChat.right,
+                ...(moveChat.top !== undefined ? { top: moveChat.top } : { bottom: moveChat.bottom }),
+              }}
+              className="fixed z-[70] max-h-60 w-40 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl"
+            >
+              <button
+                onClick={() => {
+                  onMoveChatToProject(moveChat.id, null);
+                  setMoveChat(null);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                no project
+              </button>
+              {projects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    onMoveChatToProject(moveChat.id, p.id);
+                    setMoveChat(null);
+                  }}
+                  className="block w-full truncate px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
+
+      {projectMenu &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={closeProjectMenu} />
+            <div
+              style={{ right: projectMenu.right, top: projectMenu.top }}
+              className="fixed z-[70] w-32 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-xl"
+            >
+              <button
+                onClick={() => {
+                  const p = projects.find((p) => p.id === projectMenu.id);
+                  setEditingProjectId(projectMenu.id);
+                  setEditProjectName(p?.name || "");
+                  closeProjectMenu();
+                }}
+                className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                rename
+              </button>
+              <button
+                onClick={() => {
+                  onRemoveProject(projectMenu.id);
+                  closeProjectMenu();
                 }}
                 className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
               >

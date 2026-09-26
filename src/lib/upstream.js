@@ -49,20 +49,50 @@ function withTimeout(signal, ms) {
 // --- chat -----------------------------------------------------------------
 
 async function* chatCompletionsEvents(body) {
+  // tool_calls stream as fragments keyed by index (id and function.name
+  // arrive once, function.arguments arrives in pieces to concatenate).
+  const toolCalls = [];
+  let toolCallsSent = false; // some providers repeat finish_reason on a
+  // trailing chunk; only ever yield the finished set once.
+
   for await (const j of parseSSE(body)) {
     if (j.usage) yield { usage: j.usage };
-    const d = j.choices?.[0]?.delta;
-    if (!d) continue;
-    if (d.content) yield { delta: d.content };
-    // OpenRouter / DeepSeek stream reasoning here
-    const r = d.reasoning ?? d.reasoning_content;
-    if (r) yield { reasoning: r };
+    const choice = j.choices?.[0];
+    const d = choice?.delta;
+    if (d) {
+      if (d.content) yield { delta: d.content };
+      // OpenRouter / DeepSeek stream reasoning here
+      const r = d.reasoning ?? d.reasoning_content;
+      if (r) yield { reasoning: r };
+      for (const tc of d.tool_calls || []) {
+        const slot = (toolCalls[tc.index] ??= {
+          id: "",
+          name: "",
+          arguments: "",
+        });
+        if (tc.id) slot.id = tc.id;
+        if (tc.function?.name) slot.name += tc.function.name;
+        if (tc.function?.arguments) slot.arguments += tc.function.arguments;
+      }
+    }
+    if (choice?.finish_reason === "tool_calls" && toolCalls.length && !toolCallsSent) {
+      toolCallsSent = true;
+      yield { toolCalls: toolCalls.filter(Boolean) };
+    }
   }
 }
 
 // Start a streaming completion. Returns the upstream Response; the caller
-// checks res.ok, then consumes chatEvents(res.body).
-export function streamChat({ model, messages, signal, maxOutput = MAX_OUTPUT }) {
+// checks res.ok, then consumes chatEvents(res.body). `tools`, when given, is
+// the OpenAI-style function-calling tool list; the model decides whether to
+// use it, a model with no tool support just ignores it.
+export function streamChat({
+  model,
+  messages,
+  tools,
+  signal,
+  maxOutput = MAX_OUTPUT,
+}) {
   const body = {
     model,
     messages,
@@ -71,6 +101,7 @@ export function streamChat({ model, messages, signal, maxOutput = MAX_OUTPUT }) 
     stream_options: { include_usage: true },
   };
   if (REASONING_EFFORT !== "off") body.reasoning = { effort: REASONING_EFFORT };
+  if (tools?.length) body.tools = tools;
 
   return fetch(`${BASE}/chat/completions`, {
     method: "POST",

@@ -9,8 +9,11 @@ import {
   ArrowDownIcon,
   RefreshIcon,
   EditIcon,
+  FileIcon,
+  DownloadIcon,
 } from "@/components/chat/icons";
 import ThinkingPanel from "@/components/chat/ThinkingPanel";
+import ActivityPanel from "@/components/chat/ActivityPanel";
 import Lightbox from "@/components/chat/Lightbox";
 
 const SUGGESTIONS = [
@@ -26,7 +29,7 @@ function IconButton({ onClick, title, children }) {
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="grid h-7 w-7 place-items-center rounded-md text-faint opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:bg-surface-2 hover:text-foreground"
+      className="grid h-7 w-7 place-items-center rounded-md text-faint opacity-100 transition hover:bg-surface-2 hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
     >
       {children}
     </button>
@@ -55,11 +58,19 @@ function CopyButton({ text }) {
 
 function imagesOf(msg) {
   if (msg.attachments?.length) {
-    return msg.attachments.map((a) => ({ src: a.url, name: `${a.id}` }));
+    return msg.attachments
+      .filter((a) => !a.mime || a.mime.startsWith("image/"))
+      .map((a) => ({ src: a.url, name: `${a.id}` }));
   }
   if (msg.images?.length) return msg.images.map((src) => ({ src, name: "image" }));
   if (msg.image) return [{ src: msg.image, name: "image" }];
   return [];
+}
+
+// Non-image attachments (a PDF/csv/etc a tool generated) - a real download,
+// not something to render inline.
+function filesOf(msg) {
+  return (msg.attachments || []).filter((a) => a.mime && !a.mime.startsWith("image/"));
 }
 
 function MessageRow({
@@ -80,6 +91,7 @@ function MessageRow({
     [isUser, msg.content],
   );
   const pics = imagesOf(msg);
+  const files = filesOf(msg);
   const modelLabel = MODEL_LABELS[msg.model] || msg.model;
 
   return (
@@ -107,11 +119,31 @@ function MessageRow({
         </div>
       )}
 
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {files.map((f) => (
+            <a
+              key={f.id}
+              href={f.url}
+              download={f.name}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted transition-colors hover:border-border-strong hover:text-foreground"
+            >
+              <FileIcon />
+              {f.name || "file"}
+              <DownloadIcon />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {!isUser && <ActivityPanel activity={msg.activity} />}
+
       {!isUser && (streaming || msg.reasoning) && (
         <ThinkingPanel
           reasoning={msg.reasoning || ""}
           startedAt={msg.startedAt}
           streaming={streaming}
+          toolRunning={msg.activity?.some((a) => a.status === "running")}
         />
       )}
 

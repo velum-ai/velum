@@ -14,6 +14,9 @@ const MIME_EXT = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "application/pdf": "pdf",
 };
 
 export const attachmentExt = (mime) => MIME_EXT[mime] || "bin";

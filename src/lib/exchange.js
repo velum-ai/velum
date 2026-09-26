@@ -1,6 +1,20 @@
 import { finalizeExchange, settleCredits } from "@/lib/account";
-import { usageToCredits, estimateInputTokens } from "@/lib/pricing";
+import {
+  usageToCredits,
+  estimateInputTokens,
+  codeCredits,
+  searchCredits,
+  imageCredits,
+} from "@/lib/pricing";
+
+// fetch_url has no entry - it costs velum nothing beyond ordinary bandwidth.
+const TOOL_CREDITS = {
+  run_python: codeCredits,
+  web_search: searchCredits,
+  generate_image: imageCredits,
+};
 import { saveAttachment } from "@/lib/storage";
+import { signId } from "@/lib/sign";
 import { logError } from "@/lib/logger";
 
 // The money path of one exchange, as an SSE Response. Forwards delta / reasoning
@@ -12,11 +26,28 @@ import { logError } from "@/lib/logger";
 // If the process dies here, the reservation stays PENDING and the maintenance
 // sweep refunds it, so no credits are lost.
 
-const DATA_URL = /^data:(image\/[a-z+.-]+);base64,(.+)$/i;
+const IMAGE_DATA_URL = /^data:(image\/[a-z+.-]+);base64,(.+)$/i;
+const FILE_DATA_URL = /^data:(text\/plain|text\/markdown|application\/pdf);base64,(.+)$/i;
 
-async function persistUploads({ images, accountId, chatId, messageId }) {
+async function persistUploads({ images, files, accountId, chatId, messageId }) {
   for (const url of images || []) {
-    const m = DATA_URL.exec(url);
+    const m = IMAGE_DATA_URL.exec(url);
+    if (!m) continue;
+    try {
+      await saveAttachment({
+        accountId,
+        chatId,
+        messageId,
+        kind: "upload",
+        mime: m[1].toLowerCase(),
+        buffer: Buffer.from(m[2], "base64"),
+      });
+    } catch (e) {
+      logError("attachment_save_failed", e, { chatId });
+    }
+  }
+  for (const f of files || []) {
+    const m = FILE_DATA_URL.exec(f?.url || "");
     if (!m) continue;
     try {
       await saveAttachment({
@@ -41,6 +72,7 @@ export function exchangeResponse({
   promptText,
   storedMessage,
   images,
+  files,
   events,
   appendUser = true,
   ephemeral = false,
@@ -60,10 +92,18 @@ export function exchangeResponse({
       let reply = "";
       let reasoning = "";
       let usage = null;
+      let toolSurcharge = 0;
+      const toolFiles = [];
       try {
         for await (const ev of events) {
           if (ev.usage) usage = ev.usage;
+          // billed per actual call, not deduped - the same tool can run
+          // (and cost real provider money) more than once in one exchange
+          if (ev.toolBilled) toolSurcharge += TOOL_CREDITS[ev.toolBilled]?.() || 0;
+          if (ev.toolFile) toolFiles.push(ev.toolFile);
           if (ev.error) send({ error: ev.error });
+          if (ev.toolStart) send({ toolStart: ev.toolStart });
+          if (ev.toolEnd) send({ toolEnd: ev.toolEnd });
           if (ev.reasoning) {
             reasoning += ev.reasoning;
             send({ reasoning: ev.reasoning });
@@ -77,13 +117,14 @@ export function exchangeResponse({
         // aborted or upstream dropped - settle from what we have
       }
 
-      const actual = usageToCredits(
-        model,
-        usage ?? {
-          prompt_tokens: estimateInputTokens(promptText),
-          completion_tokens: estimateInputTokens(reply),
-        },
-      );
+      const actual =
+        usageToCredits(
+          model,
+          usage ?? {
+            prompt_tokens: estimateInputTokens(promptText),
+            completion_tokens: estimateInputTokens(reply),
+          },
+        ) + toolSurcharge;
 
       if (ephemeral) {
         const balance = await settleCredits(reservationId, actual);
@@ -100,13 +141,39 @@ export function exchangeResponse({
           replyContent: reply,
           appendUser,
         });
-        if (appendUser && images?.length && result.userMessageId) {
+        if (
+          appendUser &&
+          (images?.length || files?.length) &&
+          result.userMessageId
+        ) {
           await persistUploads({
             images,
+            files,
             accountId: account,
             chatId: result.chatId,
             messageId: result.userMessageId,
           });
+        }
+        const attachments = [];
+        for (const f of toolFiles) {
+          try {
+            const at = await saveAttachment({
+              accountId: account,
+              chatId: result.chatId,
+              messageId: result.assistantMessageId,
+              kind: "generated",
+              mime: f.mime,
+              buffer: f.buffer,
+            });
+            attachments.push({
+              id: at.id,
+              mime: at.mime,
+              name: f.name,
+              url: `/api/attachments/${at.id}?t=${signId(at.id)}`,
+            });
+          } catch (e) {
+            logError("attachment_save_failed", e, { chatId: result.chatId });
+          }
         }
         send({
           done: true,
@@ -117,6 +184,7 @@ export function exchangeResponse({
           spent: result.spent,
           messageId: result.assistantMessageId,
           userMessageId: result.userMessageId,
+          attachments,
         });
       }
 

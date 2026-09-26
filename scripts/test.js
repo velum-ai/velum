@@ -13,8 +13,9 @@ const FILES = [
   "dodo.js",
   "btcpay.js",
   "crypto.js",
-  "xConversions.js",
-  "redditConversions.js",
+  "webSearch.js",
+  "codeExec.js",
+  "fetchUrl.js",
 ];
 
 let failed = 0;

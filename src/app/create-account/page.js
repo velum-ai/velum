@@ -7,7 +7,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { api } from "@/lib/clientApi";
 import { STORAGE_KEY } from "@/lib/limits";
-import { TWCLID_KEY, RDT_CID_KEY } from "@/components/AdClickCapture";
 
 export default function CreateAccountPage() {
   const router = useRouter();
@@ -20,11 +19,7 @@ export default function CreateAccountPage() {
     setStatus("loading");
     setError("");
 
-    const twclid = localStorage.getItem(TWCLID_KEY) || undefined;
-    const rdtCid = localStorage.getItem(RDT_CID_KEY) || undefined;
-    const { ok, status: code, data } = await api("/api/account", {
-      body: { twclid, rdtCid },
-    });
+    const { ok, status: code, data } = await api("/api/account", { body: {} });
     if (!ok || !data.account) {
       setStatus("error");
       setError(
@@ -35,8 +30,6 @@ export default function CreateAccountPage() {
       return;
     }
 
-    localStorage.removeItem(TWCLID_KEY);
-    localStorage.removeItem(RDT_CID_KEY);
     setAccount(data.account);
     setStatus("done");
   };

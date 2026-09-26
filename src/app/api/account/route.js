@@ -4,15 +4,11 @@ import { guardRequest } from "@/lib/guard";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import { maskAccount } from "@/lib/mask";
 import { log } from "@/lib/logger";
-import { reportConversion as reportXConversion } from "@/lib/xConversions";
-import { reportConversion as reportRedditConversion } from "@/lib/redditConversions";
 
 // Self-serve signup. Anonymous + free trial credits, so it is rate limited on
 // two windows per IP as the only abuse brake (add a CAPTCHA / Cloudflare
 // Turnstile in front for real bot resistance - see README).
 export async function POST(req) {
-  const { twclid, rdtCid } = await req.json().catch(() => ({}));
-
   const g = await guardRequest(req, {
     key: "create-account",
     limit: 5,
@@ -34,9 +30,6 @@ export async function POST(req) {
 
   const account = await createAccount();
   log("account_created", { account: maskAccount(account) });
-  // fire-and-forget, ad reporting never gates signup
-  reportXConversion(twclid);
-  reportRedditConversion(rdtCid);
   return NextResponse.json({ account });
 }
 

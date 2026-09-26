@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ThemeToggle from "@/components/ThemeToggle";
 import {
@@ -290,14 +289,22 @@ export default function AccountPage() {
     <>
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10">
         <div className="mb-1 flex items-center gap-3">
-          <Link
-            href="/chat"
+          <button
+            onClick={() => {
+              // prefer returning to the exact chat the user came from over
+              // always landing on the generic /chat route
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/chat");
+              }
+            }}
             title="back to chat"
             aria-label="back to chat"
             className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-border text-muted transition-colors hover:border-border-strong hover:text-foreground"
           >
             <ArrowLeftIcon />
-          </Link>
+          </button>
           <h1 className="flex-1 text-xl font-medium tracking-tight sm:text-2xl">
             account
           </h1>
@@ -357,7 +364,7 @@ export default function AccountPage() {
           {data?.methods?.btcpay && (
             <span className="flex w-fit overflow-hidden rounded-md border border-border">
               {[
-                { id: "dodo", label: "card" },
+                { id: "dodo", label: "card & more" },
                 { id: "btcpay", label: "monero" },
               ].map((m) => (
                 <button
@@ -401,7 +408,7 @@ export default function AccountPage() {
               ? "opening checkout…"
               : method === "btcpay"
                 ? "monero invoice, no processor in the middle."
-                : "secure checkout by dodo payments."}
+                : "secure checkout by dodo payments, card, apple pay, google pay, bank transfer and more."}
           </p>
         </Card>
 
