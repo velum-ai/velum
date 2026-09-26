@@ -29,8 +29,10 @@
     "import:legacy": "node --import ./scripts/loader.mjs scripts/import-legacy-json.js"
   },
   "dependencies": {
+    "@e2b/code-interpreter": "^2.8.0",
     "@prisma/client": "6.19.3",
     "next": "16.3.5",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

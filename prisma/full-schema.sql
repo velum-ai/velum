@@ -7,23 +7,39 @@ CREATE TYPE "ReservationStatus" AS ENUM ('PENDING', 'SETTLED', 'ABANDONED');
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('CREATED', 'PAID', 'FAILED');
 
+-- CreateEnum
+CREATE TYPE "PaymentMethod" AS ENUM ('DODO', 'BTCPAY');
+
 -- CreateTable
 CREATE TABLE "Account" (
     "number" TEXT NOT NULL,
     "credits" INTEGER NOT NULL,
     "systemPrompt" TEXT,
+    "enabledModels" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Account_pkey" PRIMARY KEY ("number")
 );
 
 -- CreateTable
+CREATE TABLE "Project" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Project_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Chat" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
+    "projectId" TEXT,
     "title" TEXT NOT NULL,
     "spent" INTEGER NOT NULL DEFAULT 0,
     "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "shared" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -85,8 +101,10 @@ CREATE TABLE "RateLimit" (
 CREATE TABLE "Payment" (
     "id" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
-    "dodoCheckoutId" TEXT NOT NULL,
+    "method" "PaymentMethod" NOT NULL DEFAULT 'DODO',
+    "dodoCheckoutId" TEXT,
     "dodoPaymentId" TEXT,
+    "btcpayInvoiceId" TEXT,
     "amountCents" INTEGER NOT NULL,
     "credits" INTEGER NOT NULL,
     "status" "PaymentStatus" NOT NULL DEFAULT 'CREATED',
@@ -97,7 +115,13 @@ CREATE TABLE "Payment" (
 );
 
 -- CreateIndex
+CREATE INDEX "Project_accountId_idx" ON "Project"("accountId");
+
+-- CreateIndex
 CREATE INDEX "Chat_accountId_updatedAt_idx" ON "Chat"("accountId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "Chat_projectId_idx" ON "Chat"("projectId");
 
 -- CreateIndex
 CREATE INDEX "Message_chatId_id_idx" ON "Message"("chatId", "id");
@@ -118,10 +142,19 @@ CREATE UNIQUE INDEX "Payment_dodoCheckoutId_key" ON "Payment"("dodoCheckoutId");
 CREATE UNIQUE INDEX "Payment_dodoPaymentId_key" ON "Payment"("dodoPaymentId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Payment_btcpayInvoiceId_key" ON "Payment"("btcpayInvoiceId");
+
+-- CreateIndex
 CREATE INDEX "Payment_accountId_createdAt_idx" ON "Payment"("accountId", "createdAt");
 
 -- AddForeignKey
+ALTER TABLE "Project" ADD CONSTRAINT "Project_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("number") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Chat" ADD CONSTRAINT "Chat_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("number") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Chat" ADD CONSTRAINT "Chat_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Message" ADD CONSTRAINT "Message_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "Chat"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -17,6 +17,9 @@ import {
   MAX_IMAGES,
   MAX_IMAGE_BYTES,
   IMAGE_TYPES,
+  MAX_FILES,
+  MAX_FILE_BYTES,
+  FILE_TYPES,
 } from "@/lib/limits";
 
 function pickDefaultModel(models) {
@@ -35,6 +38,8 @@ const DRAFT_PREFIX = "velum_draft:";
 const LENGTH_KEY = "velum_length";
 const LAST_CHAT_KEY = "velum_last_chat";
 const SIDEBAR_KEY = "velum_sidebar";
+const SIDEBAR_WIDTH_KEY = "velum_sidebar_width";
+const DEFAULT_SIDEBAR_WIDTH = 256;
 const readLS = (k, fallback = "") => {
   try {
     return localStorage.getItem(k) ?? fallback;
@@ -89,7 +94,9 @@ export default function ChatPage() {
   const [account, setAccount] = useState(null);
   const [credits, setCredits] = useState(null);
   const [chats, setChats] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const [shared, setShared] = useState(false);
   const [models, setModels] = useState([]);
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [maxOutput, setMaxOutput] = useState(4000);
@@ -97,15 +104,19 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [images, setImages] = useState([]);
+  const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState("chat");
   const [editingChatId, setEditingChatId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [ephemeral, setEphemeral] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchScope, setSearchScope] = useState(null); // { projectId, name } | null
   const [length, setLength] = useState("balanced");
   const [booting, setBooting] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
@@ -118,8 +129,8 @@ export default function ChatPage() {
 
   const outOfCredits = credits === 0;
 
-  const addImages = (files) => {
-    for (const file of files) {
+  const addImages = (fileList) => {
+    for (const file of fileList) {
       if (!IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES) {
         continue;
       }
@@ -131,6 +142,36 @@ export default function ChatPage() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Plain-text files (.txt, .md): read as a data URL just like images, kept
+  // separately so the composer can show them as named chips, not thumbnails.
+  const addFiles = (fileList) => {
+    for (const file of fileList) {
+      if (!FILE_TYPES.includes(file.type) || file.size > MAX_FILE_BYTES) {
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFiles((prev) =>
+          prev.length >= MAX_FILES
+            ? prev
+            : [...prev, { name: file.name, url: reader.result }],
+        );
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleFiles = (fileList) => {
+    const images = [];
+    const docs = [];
+    for (const file of fileList) {
+      if (IMAGE_TYPES.includes(file.type)) images.push(file);
+      else if (FILE_TYPES.includes(file.type)) docs.push(file);
+    }
+    if (images.length) addImages(images);
+    if (docs.length) addFiles(docs);
   };
 
   const handlePaste = (e) => {
@@ -147,6 +188,7 @@ export default function ChatPage() {
       ({ data }) => {
         if (typeof data.credits === "number") setCredits(data.credits);
         if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
+        if (Array.isArray(data.projects)) setProjects(data.projects);
         return data;
       },
     );
@@ -178,6 +220,7 @@ export default function ChatPage() {
         }
         if (typeof data.credits === "number") setCredits(data.credits);
         if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
+        if (Array.isArray(data.projects)) setProjects(data.projects);
         if (data.chat) {
           setActiveChatId(data.chat.id);
           setMessages(data.chat.messages || []);
@@ -209,6 +252,8 @@ export default function ChatPage() {
       setLength(savedLen);
     }
     if (readLS(SIDEBAR_KEY) === "hidden") setSidebarHidden(true);
+    const savedWidth = Number(readLS(SIDEBAR_WIDTH_KEY));
+    if (savedWidth >= 200 && savedWidth <= 420) setSidebarWidth(savedWidth);
     setInput(readLS(DRAFT_PREFIX + "new"));
     focusComposer();
   }, []);
@@ -227,18 +272,26 @@ export default function ChatPage() {
     writeLS(SIDEBAR_KEY, hidden ? "hidden" : "");
   };
 
+  // persist sidebar width, debounced so a drag doesn't spam localStorage
+  useEffect(() => {
+    const t = setTimeout(() => writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)), 300);
+    return () => clearTimeout(t);
+  }, [sidebarWidth]);
+
   const changeLength = (l) => {
     setLength(l);
     writeLS(LENGTH_KEY, l);
   };
 
-  const startNewChat = ({ push = true } = {}) => {
+  const startNewChat = ({ push = true, projectId = null } = {}) => {
     setActiveChatId(null);
+    setShared(false);
     setMessages([]);
     setLoadingChat(false);
     setMode("chat");
     setInput(readLS(DRAFT_PREFIX + "new"));
     writeLS(LAST_CHAT_KEY, "");
+    setPendingProjectId(projectId);
     if (push) syncUrl(null);
     focusComposer();
   };
@@ -247,6 +300,7 @@ export default function ChatPage() {
     const next = !ephemeral;
     setEphemeral(next);
     setActiveChatId(null);
+    setShared(false);
     setMessages([]);
     setLoadingChat(false);
     setInput(next ? "" : readLS(DRAFT_PREFIX + "new"));
@@ -265,7 +319,9 @@ export default function ChatPage() {
   const selectChat = async (chat, { push = true, acct = account } = {}) => {
     setEphemeral(false);
     setMode("chat");
+    setPendingProjectId(null);
     setActiveChatId(chat.id);
+    setShared(Boolean(chat.shared));
     // show the cached thread if we have it, otherwise a skeleton while it loads
     const cached = Array.isArray(chat.messages) && chat.messages.length > 0;
     setMessages(cached ? chat.messages : []);
@@ -278,6 +334,7 @@ export default function ChatPage() {
         body: { account: acct, chatId: chat.id },
       });
       if (ok && Array.isArray(data.messages)) setMessages(data.messages);
+      if (ok && typeof data.shared === "boolean") setShared(data.shared);
     } finally {
       setLoadingChat(false);
       focusComposer();
@@ -307,8 +364,18 @@ export default function ChatPage() {
   // regenerate (rerun the last assistant turn). replaceFromIndex trims local
   // state and, on the server, the stored thread; appendUser is false only when
   // regenerating.
-  const runChat = async ({ text, imgs = [], replaceFromIndex = null, appendUser = true }) => {
+  const runChat = async ({
+    text,
+    imgs = [],
+    docs = [],
+    replaceFromIndex = null,
+    appendUser = true,
+  }) => {
     if (!account || sending) return;
+
+    const isNewChat = !ephemeral && !activeChatId;
+    const targetProjectId = pendingProjectId;
+    setPendingProjectId(null);
 
     let base =
       replaceFromIndex != null ? messages.slice(0, replaceFromIndex) : messages;
@@ -316,7 +383,7 @@ export default function ChatPage() {
       base = [...base, { role: "user", content: text, ...(imgs.length && { images: imgs }) }];
     }
     const startedAt = Date.now();
-    const retry = { text, imgs, appendUser };
+    const retry = { text, imgs, docs, appendUser };
     setMessages([
       ...base,
       { role: "assistant", content: "", reasoning: "", startedAt },
@@ -324,6 +391,7 @@ export default function ChatPage() {
     setInput("");
     if (draftKey) writeLS(draftKey, "");
     setImages([]);
+    setFiles([]);
     setSending(true);
 
     const controller = new AbortController();
@@ -334,12 +402,15 @@ export default function ChatPage() {
 
     let acc = "";
     let reason = "";
+    // Server-driven now: search and code execution are both real tools the
+    // model decides to call, so this only ever fills in from toolStart/End.
+    const activity = [];
     let frame = null;
     const flush = () => {
       frame = null;
       setMessages([
         ...base,
-        { role: "assistant", content: acc, reasoning: reason, startedAt },
+        { role: "assistant", content: acc, reasoning: reason, activity: [...activity], startedAt },
       ]);
     };
     const paint = () => {
@@ -358,6 +429,7 @@ export default function ChatPage() {
           length,
           appendUser,
           ...(imgs.length && { images: imgs }),
+          ...(docs.length && { files: docs }),
           ...(anchorId != null && !ephemeral && { truncateAfterId: anchorId }),
           ...(ephemeral && {
             ephemeral: true,
@@ -388,6 +460,17 @@ export default function ChatPage() {
       let final = null;
       let errored = null;
       for await (const json of parseSSE(res.body)) {
+        if (json.toolStart) {
+          activity.push({ ...json.toolStart, status: "running" });
+          paint();
+        }
+        if (json.toolEnd) {
+          const running = activity.find(
+            (a) => a.name === json.toolEnd.name && a.status === "running",
+          );
+          if (running) Object.assign(running, json.toolEnd, { status: "done" });
+          paint();
+        }
         if (json.reasoning) {
           reason += json.reasoning;
           paint();
@@ -409,6 +492,8 @@ export default function ChatPage() {
           role: "assistant",
           content: replyContent,
           reasoning: reason || null,
+          activity: activity.length ? activity : null,
+          attachments: final.attachments?.length ? final.attachments : undefined,
           cost: final.cost,
           model,
           id: final.messageId,
@@ -434,10 +519,17 @@ export default function ChatPage() {
               messages: finalMessages,
               spent: final.spent ?? 0,
               pinned: prev.find((c) => c.id === final.chatId)?.pinned ?? false,
+              ...(isNewChat && targetProjectId ? { projectId: targetProjectId } : {}),
             },
             ...prev.filter((c) => c.id !== final.chatId),
           ]),
         );
+        if (isNewChat && targetProjectId) {
+          api("/api/chats", {
+            method: "PATCH",
+            body: { account, chatId: final.chatId, projectId: targetProjectId },
+          });
+        }
       } else {
         setMessages([
           ...base,
@@ -557,13 +649,20 @@ export default function ChatPage() {
       if (text) generateImage(text);
       return;
     }
-    if ((!text && images.length === 0) || sending || outOfCredits) return;
-    const imgPrompt = images.length === 0 ? detectImagePrompt(text) : null;
+    if (
+      (!text && images.length === 0 && files.length === 0) ||
+      sending ||
+      outOfCredits
+    ) {
+      return;
+    }
+    const imgPrompt =
+      images.length === 0 && files.length === 0 ? detectImagePrompt(text) : null;
     if (imgPrompt) {
       generateImage(imgPrompt);
       return;
     }
-    runChat({ text, imgs: images });
+    runChat({ text, imgs: images, docs: files });
   };
 
   const retryFailed = (index) => {
@@ -574,7 +673,13 @@ export default function ChatPage() {
       return;
     }
     const cut = r.appendUser ? index - 1 : index;
-    runChat({ text: r.text, imgs: r.imgs || [], replaceFromIndex: cut, appendUser: r.appendUser });
+    runChat({
+      text: r.text,
+      imgs: r.imgs || [],
+      docs: r.docs || [],
+      replaceFromIndex: cut,
+      appendUser: r.appendUser,
+    });
   };
 
   const regenerate = (assistantIndex) => {
@@ -606,10 +711,60 @@ export default function ChatPage() {
     await api("/api/chats", { method: "PATCH", body: { account, chatId, pinned } });
   };
 
+  const toggleShared = async () => {
+    if (!activeChatId) return;
+    const next = !shared;
+    setShared(next);
+    await api("/api/chats", {
+      method: "PATCH",
+      body: { account, chatId: activeChatId, shared: next },
+    });
+  };
+
   const removeChat = async (chatId) => {
     setChats((prev) => prev.filter((c) => c.id !== chatId));
     if (chatId === activeChatId) startNewChat();
     await api("/api/chats", { method: "DELETE", body: { account, chatId } });
+  };
+
+  const createProject = async (name) => {
+    const clean = name.trim();
+    if (!clean) return;
+    const { ok, data } = await api("/api/projects", {
+      method: "POST",
+      body: { account, name: clean },
+    });
+    if (ok) setProjects((prev) => [...prev, data]);
+  };
+
+  const renameProject = async (projectId, name) => {
+    const clean = name.trim();
+    if (!clean) return;
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, name: clean } : p)),
+    );
+    await api("/api/projects", {
+      method: "PATCH",
+      body: { account, projectId, name: clean },
+    });
+  };
+
+  const removeProject = async (projectId) => {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setChats((prev) =>
+      prev.map((c) => (c.projectId === projectId ? { ...c, projectId: null } : c)),
+    );
+    await api("/api/projects", { method: "DELETE", body: { account, projectId } });
+  };
+
+  const moveChatToProject = async (chatId, projectId) => {
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, projectId } : c)),
+    );
+    await api("/api/chats", {
+      method: "PATCH",
+      body: { account, chatId, projectId },
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -630,6 +785,7 @@ export default function ChatPage() {
       const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setSearchScope(null);
         setPaletteOpen((v) => !v);
         return;
       }
@@ -686,6 +842,7 @@ export default function ChatPage() {
     <main className="fixed inset-0 flex overflow-hidden bg-background">
       <Sidebar
         chats={chats}
+        projects={projects}
         loading={booting}
         activeChatId={activeChatId}
         editingChatId={editingChatId}
@@ -701,10 +858,27 @@ export default function ChatPage() {
         onRenameChat={renameChat}
         onRemoveChat={removeChat}
         onTogglePin={togglePin}
+        onCreateProject={createProject}
+        onRenameProject={renameProject}
+        onRemoveProject={removeProject}
+        onMoveChatToProject={moveChatToProject}
+        onNewChatInProject={(projectId) => {
+          startNewChat({ projectId });
+          setSidebarOpen(false);
+        }}
+        onSearchProject={(project) => {
+          setSearchScope({ projectId: project.id, name: project.name });
+          setPaletteOpen(true);
+        }}
+        width={sidebarWidth}
+        onResize={setSidebarWidth}
         account={account}
         credits={credits}
         onSignOut={signOut}
-        onSearch={() => setPaletteOpen(true)}
+        onSearch={() => {
+          setSearchScope(null);
+          setPaletteOpen(true);
+        }}
         desktopHidden={sidebarHidden}
         onToggleDesktop={() => setSidebarHiddenPersist(true)}
         mobileOpen={sidebarOpen}
@@ -716,13 +890,15 @@ export default function ChatPage() {
           models={models}
           model={model}
           onModelChange={setModel}
-          credits={credits}
           ephemeral={ephemeral}
           onToggleEphemeral={toggleEphemeral}
           onNewChat={() => startNewChat()}
           onOpenSidebar={() => setSidebarOpen(true)}
           sidebarHidden={sidebarHidden}
           onShowSidebar={() => setSidebarHiddenPersist(false)}
+          chatId={ephemeral ? null : activeChatId}
+          shared={shared}
+          onToggleShared={toggleShared}
         />
 
         <MessageList
@@ -744,6 +920,10 @@ export default function ChatPage() {
           onRemoveImage={(i) =>
             setImages((prev) => prev.filter((_, j) => j !== i))
           }
+          files={files}
+          onRemoveFile={(i) =>
+            setFiles((prev) => prev.filter((_, j) => j !== i))
+          }
           input={input}
           onInputChange={setInput}
           onKeyDown={handleKeyDown}
@@ -752,8 +932,8 @@ export default function ChatPage() {
           onStop={stopGeneration}
           onSend={onSend}
           fileInputRef={fileInputRef}
-          onFilesSelected={addImages}
-          imageAccept={IMAGE_TYPES.join(",")}
+          onFilesSelected={handleFiles}
+          fileAccept={[...IMAGE_TYPES, ...FILE_TYPES].join(",")}
           inputRef={inputRef}
           mode={mode}
           onToggleMode={() => setMode((m) => (m === "image" ? "chat" : "image"))}
@@ -770,9 +950,15 @@ export default function ChatPage() {
         account={account}
         chats={chats}
         onSelectChat={(c) => selectChat(c)}
-        onNewChat={() => startNewChat()}
+        onNewChat={() =>
+          searchScope
+            ? startNewChat({ projectId: searchScope.projectId })
+            : startNewChat()
+        }
         onToggleEphemeral={toggleEphemeral}
         onOpenAccount={() => router.push("/account")}
+        scopeProjectId={searchScope?.projectId ?? null}
+        scopeLabel={searchScope?.name ?? null}
       />
 
       <ShortcutsSheet

@@ -17,11 +17,6 @@ const questions = [
       "yes. message content, reasoning, chat titles, and custom instructions are encrypted at rest. a database leak or backup exposes ciphertext, not conversations.",
   },
   {
-    question: "do you track ad clicks?",
-    answer:
-      "if you arrive from an ad, its click id is held in your browser until you create an account, then reported once to confirm the click led to a signup. no account number is included, and nothing keeps the click id linked to your account afterward. no ad script or cookie runs on the site.",
-  },
-  {
     question: "how does billing work?",
     answer:
       "pay-as-you-go. 100 credits = $1.00. each message costs the model's token price plus a 40% markup that covers payment fees, refunds on cancelled replies, and hosting. you are billed for the tokens actually used and unused credit never expires. see the pricing page for per-model rates.",
@@ -29,7 +24,7 @@ const questions = [
   {
     question: "what payment methods do you accept?",
     answer:
-      "card, or monero through a self-hosted btcpay server with no processor in the middle. no bank or card details reach us either way.",
+      "card, apple pay, google pay, bank transfer, and more through dodo payments, or monero through a self-hosted btcpay server with no processor in the middle. no bank or card details reach us either way.",
   },
   {
     question: "which models can i use?",
@@ -55,6 +50,20 @@ const questions = [
     question: "what are custom instructions?",
     answer:
       "optional text you save on the account page. it is added as a system message at the start of every new chat.",
+  },
+  {
+    question: "can the model run code or search the web?",
+    answer:
+      "yes, automatically, whenever it decides it would help answer you. it can run python in an isolated sandbox (via e2b), search the web (via brave search), fetch the full content of a specific page, and generate images. each real use adds a small flat cost on top of the tokens spent, shown in the reply's cost breakdown.",
+  },
+  {
+    question: "what happens to code the model runs?",
+    answer:
+      "it runs in a fresh, disposable sandbox created for that one call and destroyed right after. nothing persists between calls, and the sandbox has no access to other users' data.",
+  },
+  {
+    question: "can i organize my chats?",
+    answer: "yes, group them into projects from the sidebar.",
   },
   {
     question: "is there a free tier?",

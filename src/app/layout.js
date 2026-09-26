@@ -2,7 +2,6 @@ import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import { site } from "@/config/site";
 import InstallPrompt from "@/components/InstallPrompt";
-import AdClickCapture from "@/components/AdClickCapture";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -75,7 +74,6 @@ export default function RootLayout({ children }) {
       <body>
         <div className="flex min-h-screen flex-col">{children}</div>
         <InstallPrompt />
-        <AdClickCapture />
       </body>
     </html>
   );

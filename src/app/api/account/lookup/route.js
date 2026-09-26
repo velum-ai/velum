@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listChats, getChat } from "@/lib/account";
+import { listChats, listProjects, getChat } from "@/lib/account";
 import { guardRequest } from "@/lib/guard";
 import { decorateChatAttachments } from "@/lib/attachmentUrl";
 
@@ -18,8 +18,9 @@ export async function POST(req) {
   });
   if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
 
-  const [chats, chat] = await Promise.all([
+  const [chats, projects, chat] = await Promise.all([
     listChats(account),
+    listProjects(account),
     chatId ? getChat(account, chatId) : null,
   ]);
 
@@ -27,6 +28,7 @@ export async function POST(req) {
     account,
     credits: g.record.credits,
     chats,
+    projects,
     chat: decorateChatAttachments(chat),
   });
 }

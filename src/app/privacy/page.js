@@ -16,7 +16,7 @@ const points = [
   },
   {
     title: "payments",
-    body: "payments are handled by dodo payments, our merchant of record. they collect an email and billing address to charge the card and issue a receipt, as tax rules require. velum never receives or stores it. we keep only the amount, the credits added, and the date.",
+    body: "payments are handled by dodo payments, our merchant of record. they collect an email and billing address to process the payment and issue a receipt, as tax rules require. velum never receives or stores it. we keep only the amount, the credits added, and the date.",
   },
   {
     title: "abuse prevention",

@@ -170,6 +170,22 @@ const IMAGE_USD = Number(process.env.IMAGE_USD) || 0.04;
 export const imageCredits = () =>
   Math.max(1, Math.ceil((IMAGE_USD / USD_PER_CREDIT) * MARGIN));
 
+// --- web search --------------------------------------------------------------
+// Flat cost per search call (Brave Search's paid tier is billed per query),
+// margin applied same as everything else.
+const SEARCH_USD = Number(process.env.SEARCH_USD) || 0.005;
+
+export const searchCredits = () =>
+  Math.max(1, Math.ceil((SEARCH_USD / USD_PER_CREDIT) * MARGIN));
+
+// --- code execution ----------------------------------------------------------
+// Flat cost per sandbox run (E2B is billed per second of sandbox uptime; this
+// approximates one short-lived run), margin applied.
+const CODE_EXEC_USD = Number(process.env.CODE_EXEC_USD) || 0.01;
+
+export const codeCredits = () =>
+  Math.max(1, Math.ceil((CODE_EXEC_USD / USD_PER_CREDIT) * MARGIN));
+
 // --- top-ups (Dodo Payments, USD) ------------------------------------------
 // Credits are pegged at USD_PER_CREDIT, so N credits cost N * USD_PER_CREDIT.
 // Dodo charges in the lowest denomination (cents). Purchases are clamped to

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   renameChat,
   setChatPinned,
+  setChatShared,
+  setChatProject,
   deleteChat,
   getChat,
 } from "@/lib/account";
@@ -36,7 +38,11 @@ export async function PATCH(req) {
   const result =
     typeof body.pinned === "boolean"
       ? await setChatPinned(body.account, body.chatId, body.pinned)
-      : await renameChat(body.account, body.chatId, body.title);
+      : typeof body.shared === "boolean"
+        ? await setChatShared(body.account, body.chatId, body.shared)
+        : "projectId" in body
+          ? await setChatProject(body.account, body.chatId, body.projectId)
+          : await renameChat(body.account, body.chatId, body.title);
   return result ? json(result) : json({ error: "invalid request" }, 400);
 }
 

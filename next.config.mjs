@@ -9,9 +9,18 @@ const nextConfig = {
   // self-contained server bundle for the Docker image (see Dockerfile)
   output: "standalone",
 
-  // ship the generated Prisma client + query engine with the standalone bundle
+  // pdf-parse pulls in a native binary (@napi-rs/canvas); keep it un-bundled
+  // and make sure its prebuilt binary actually ships in the standalone build.
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+
+  // ship the generated Prisma client + query engine, and pdf-parse's native
+  // binary, with the standalone bundle
   outputFileTracingIncludes: {
-    "/**": ["./node_modules/.prisma/client/**", "./node_modules/@prisma/client/**"],
+    "/**": [
+      "./node_modules/.prisma/client/**",
+      "./node_modules/@prisma/client/**",
+      "./node_modules/@napi-rs/canvas*/**",
+    ],
   },
   outputFileTracingExcludes: {
     "*": ["data/**", ".data/**", "scripts/**", "**/*.md", ".git/**"],

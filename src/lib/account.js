@@ -81,7 +81,7 @@ export async function listChats(number) {
   const chats = await prisma.chat.findMany({
     where: { accountId: number },
     orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
-    select: { id: true, title: true, spent: true, pinned: true },
+    select: { id: true, title: true, spent: true, pinned: true, projectId: true },
   });
   return chats.map(decChat);
 }
@@ -106,6 +106,23 @@ export async function getChat(number, chatId) {
       id: true,
       title: true,
       pinned: true,
+      shared: true,
+      projectId: true,
+      messages: { orderBy: { id: "asc" }, select: MESSAGE_SELECT },
+    },
+  });
+  return chat && { ...decChat(chat), messages: chat.messages.map(decMessage) };
+}
+
+// Public, read-only: no account scoping, gated on shared=true instead. The
+// chat id (an unguessable uuid) is the only secret, same trust model as
+// attachment ids.
+export async function getSharedChat(chatId) {
+  const chat = await prisma.chat.findFirst({
+    where: { id: chatId, shared: true },
+    select: {
+      id: true,
+      title: true,
       messages: { orderBy: { id: "asc" }, select: MESSAGE_SELECT },
     },
   });
@@ -330,12 +347,74 @@ export async function setChatPinned(number, chatId, pinned) {
   return count ? { id: chatId, pinned: Boolean(pinned) } : null;
 }
 
+export async function setChatShared(number, chatId, shared) {
+  const { count } = await prisma.chat.updateMany({
+    where: { id: chatId, accountId: number },
+    data: { shared: Boolean(shared) },
+  });
+  return count ? { id: chatId, shared: Boolean(shared) } : null;
+}
+
 export async function deleteChat(number, chatId) {
   await deleteAttachmentFilesForChats([chatId]);
   const { count } = await prisma.chat.deleteMany({
     where: { id: chatId, accountId: number },
   });
   return count > 0;
+}
+
+// --- projects: purely organizational chat grouping ----------------------
+
+export async function listProjects(number) {
+  const projects = await prisma.project.findMany({
+    where: { accountId: number },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true },
+  });
+  return projects;
+}
+
+export async function createProject(number, name) {
+  const clean = String(name ?? "").trim().slice(0, TITLE_MAX);
+  if (!clean) return null;
+  const project = await prisma.project.create({
+    data: { accountId: number, name: clean },
+    select: { id: true, name: true },
+  });
+  return project;
+}
+
+export async function renameProject(number, projectId, name) {
+  const clean = String(name ?? "").trim().slice(0, TITLE_MAX);
+  if (!clean) return null;
+  const { count } = await prisma.project.updateMany({
+    where: { id: projectId, accountId: number },
+    data: { name: clean },
+  });
+  return count ? { id: projectId, name: clean } : null;
+}
+
+export async function deleteProject(number, projectId) {
+  const { count } = await prisma.project.deleteMany({
+    where: { id: projectId, accountId: number },
+  });
+  return count > 0;
+}
+
+// `projectId` of null ungroups the chat.
+export async function setChatProject(number, chatId, projectId) {
+  if (projectId) {
+    const owned = await prisma.project.findFirst({
+      where: { id: projectId, accountId: number },
+      select: { id: true },
+    });
+    if (!owned) return null;
+  }
+  const { count } = await prisma.chat.updateMany({
+    where: { id: chatId, accountId: number },
+    data: { projectId: projectId || null },
+  });
+  return count ? { id: chatId, projectId: projectId || null } : null;
 }
 
 // --- account settings + data controls ----------------------------------
