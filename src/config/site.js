@@ -19,8 +19,7 @@ export const site = {
   // canonical origin, used for metadata / sitemap / robots / payment return
   url: normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL, "https://velum.run"),
 
-  // optional - footer link is hidden when unset
-  github: process.env.NEXT_PUBLIC_GITHUB_URL || "",
+  github: "https://github.com/velum-ai/velum",
 };
 
 export const navigation = [
@@ -33,4 +32,4 @@ export const footerNavigation = [
   { label: "privacy", href: "/privacy" },
   { label: "terms", href: "/terms" },
   { label: "github", href: site.github },
-].filter((link) => link.href);
+];
