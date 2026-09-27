@@ -3,8 +3,11 @@ import { findAccount } from "@/lib/account";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import { log } from "@/lib/logger";
 
-// The one error-response shape every route returns on rejection.
-export const bad = (error, status) => NextResponse.json({ error }, { status });
+// The one error-response shape every route returns on rejection. `extra`
+// merges in additional fields, e.g. the real balance on a 402 so the client
+// doesn't have to assume "0" just because this one request was rejected.
+export const bad = (error, status, extra) =>
+  NextResponse.json({ error, ...extra }, { status });
 
 // The one admission seam for every API route: per-ip rate limit, then optional
 // account lookup. findAccount validates format and uses a parameterized query,

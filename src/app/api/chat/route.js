@@ -464,7 +464,10 @@ export async function POST(req) {
       ? base * (MAX_TOOL_ROUNDS + 1) + maxToolCost * MAX_TOOL_ROUNDS
       : base,
   );
-  if (!r.ok) return bad("not enough credits", 402);
+  // Include the real balance: the client must not assume "0" here, this
+  // rejection just means the balance is short of this request's worst-case
+  // hold, not that the account is actually empty.
+  if (!r.ok) return bad("not enough credits", 402, { credits: r.balance });
 
   const userContent = images?.length
     ? [

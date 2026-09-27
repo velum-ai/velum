@@ -40,7 +40,7 @@ export async function POST(req) {
 
   const cost = imageCredits();
   const r = await reserveCredits(account, cost);
-  if (!r.ok) return bad("not enough credits", 402);
+  if (!r.ok) return bad("not enough credits", 402, { credits: r.balance });
 
   let image;
   try {
