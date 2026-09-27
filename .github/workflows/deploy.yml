@@ -1,0 +1,35 @@
+name: deploy
+
+# Runs deploy/deploy.sh on the production host over SSH whenever main is
+# pushed. That script is where the actual safety lives: it rebuilds via
+# docker compose (which runs lint + test + the Next.js build as a real
+# dependency, see the Dockerfile's `test` stage) and only replaces the
+# running container once the new one reports healthy, rolling back
+# automatically otherwise. This workflow just triggers it.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   DEPLOY_HOST        the server's hostname or IP
+#   DEPLOY_USER        the SSH user to deploy as
+#   DEPLOY_SSH_KEY     private key for that user, no passphrase
+#   DEPLOY_PATH        absolute path to the persistent git clone on that
+#                      host, e.g. /opt/velum (must already be a clone of
+#                      this repo, with a working .env alongside it)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            bash deploy/deploy.sh main
