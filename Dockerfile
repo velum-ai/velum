@@ -11,9 +11,16 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci
 
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+# Lint + the pure-function test suite run as a real build dependency, not a
+# separate CI step: `builder` copies its output, so a lint or test failure
+# fails `docker compose build` itself, before any running container is
+# touched. No DATABASE_URL needed, these tests are self-contained.
+FROM deps AS test
 COPY . .
+RUN npm run lint && npm test
+
+FROM base AS builder
+COPY --from=test /app ./
 RUN npm run build
 
 # ephemeral image used by docker-compose to run `prisma migrate deploy`
