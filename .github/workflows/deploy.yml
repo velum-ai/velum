@@ -23,6 +23,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # A cold docker build (no cache) on a modest VPS has taken 10+ minutes in
+    # testing; give the whole job real headroom above the SSH step's own timeout.
+    timeout-minutes: 45
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
@@ -30,6 +33,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # appleboy/ssh-action defaults to a 10m command timeout, which cut
+          # the build off mid-way (see "Run Command Timeout" in Actions logs).
+          command_timeout: 40m
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             bash deploy/deploy.sh main
