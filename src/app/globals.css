@@ -244,6 +244,59 @@
   font-size: 0.88em;
   font-family: var(--font-mono);
 }
+
+/* Minimal syntax highlighting (highlight.js classes), muted on purpose -
+   a light accent for the few token kinds worth distinguishing, everything
+   else just inherits the surrounding text color instead of a rainbow. */
+.hljs {
+  color: var(--color-foreground);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-faint);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #7aa2f7;
+}
+.hljs-string,
+.hljs-addition {
+  color: #9ece6a;
+}
+.hljs-number,
+.hljs-symbol {
+  color: #e0af68;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_ {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--color-muted);
+}
+.hljs-tag,
+.hljs-name {
+  color: #7aa2f7;
+}
+.hljs-deletion {
+  color: #f7768e;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
 .md-h {
   font-weight: 600;
   line-height: 1.3;

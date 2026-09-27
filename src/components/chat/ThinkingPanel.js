@@ -28,29 +28,35 @@ export default function ThinkingPanel({
   startedAt = null,
   streaming = false,
   toolRunning = false,
+  contentStarted = false,
 }) {
   const [open, setOpen] = useState(false);
   // real state, ticked by the interval - a derived `Date.now()` value would be
   // memoised by the React compiler and never update.
   const [secs, setSecs] = useState(() => secsSince(startedAt));
 
+  // Reasoning is over once the visible reply starts, even if the exchange
+  // (tool calls, etc.) is still streaming - keeping the live ticking view up
+  // after real output is already flowing reads as stuck/out of sync.
+  const live = streaming && !contentStarted;
+
   useEffect(() => {
     if (!startedAt) return;
     /* eslint-disable-next-line react-hooks/set-state-in-effect -- sync elapsed time */
     setSecs(secsSince(startedAt));
-    if (!streaming) return;
+    if (!live) return;
     const t = setInterval(() => setSecs(secsSince(startedAt)), 1000);
     return () => clearInterval(t);
-  }, [streaming, startedAt]);
+  }, [live, startedAt]);
 
   const hasText = reasoning.trim().length > 0;
 
   // A running tool already has its own "doing X" row (ActivityPanel); a
   // second, identical bouncing-dots spinner here with nothing to show yet
   // is redundant, not informative.
-  if (streaming && toolRunning && !hasText) return null;
+  if (live && toolRunning && !hasText) return null;
 
-  if (streaming) {
+  if (live) {
     return (
       <div className="w-full">
         <div className="flex items-center gap-2 px-1 py-1 font-chat text-xs text-faint">

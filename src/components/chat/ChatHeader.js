@@ -1,6 +1,7 @@
 "use client";
 
 import { DEFAULT_MODEL } from "@/lib/limits";
+import { MODEL_LABELS } from "@/lib/pricing";
 import { useEffect, useRef, useState } from "react";
 import {
   MenuIcon,
@@ -30,7 +31,7 @@ export default function ChatHeader({
 }) {
   const options = models.length
     ? models
-    : [{ id: DEFAULT_MODEL, label: DEFAULT_MODEL }];
+    : [{ id: DEFAULT_MODEL, label: MODEL_LABELS[DEFAULT_MODEL] || DEFAULT_MODEL }];
   const [copied, setCopied] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const shareRef = useRef(null);
@@ -110,49 +111,54 @@ export default function ChatHeader({
         <IncognitoIcon />
       </button>
 
-      {chatId && (
-        <div ref={shareRef} className="relative">
-          <button
-            onClick={handleShareClick}
-            title={shared ? "view or copy the share link" : "share a read-only link to this chat"}
-            className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors ${
-              shared
-                ? "border-border-strong bg-surface-2 text-foreground"
-                : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
-            }`}
-          >
-            <ShareIcon />
-          </button>
-          {linkOpen && shared && (
-            <div className="absolute right-0 top-9 z-20 w-72 rounded-lg border border-border bg-surface p-3 shadow-xl">
-              <p className="mb-2 text-xs text-muted">
-                anyone with this link can view this chat, read-only.
-              </p>
-              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5">
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-                  {shareUrl}
-                </span>
-                <button
-                  onClick={copyLink}
-                  title="copy link"
-                  className="grid h-6 w-6 shrink-0 place-items-center rounded text-faint transition-colors hover:bg-surface hover:text-foreground"
-                >
-                  {copied ? <CheckIcon /> : <CopyIcon />}
-                </button>
-              </div>
+      <div ref={shareRef} className="relative">
+        <button
+          onClick={chatId ? handleShareClick : undefined}
+          disabled={!chatId}
+          title={
+            !chatId
+              ? "send a message first to share this chat"
+              : shared
+                ? "view or copy the share link"
+                : "share a read-only link to this chat"
+          }
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+            shared
+              ? "border-border-strong bg-surface-2 text-foreground"
+              : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
+          }`}
+        >
+          <ShareIcon />
+        </button>
+        {chatId && linkOpen && shared && (
+          <div className="absolute right-0 top-9 z-20 w-72 rounded-lg border border-border bg-surface p-3 shadow-xl">
+            <p className="mb-2 text-xs text-muted">
+              anyone with this link can view this chat, read-only.
+            </p>
+            <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                {shareUrl}
+              </span>
               <button
-                onClick={() => {
-                  onToggleShared();
-                  setLinkOpen(false);
-                }}
-                className="mt-2 text-xs text-faint underline transition-colors hover:text-foreground"
+                onClick={copyLink}
+                title="copy link"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded text-faint transition-colors hover:bg-surface hover:text-foreground"
               >
-                turn off sharing
+                {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
             </div>
-          )}
-        </div>
-      )}
+            <button
+              onClick={() => {
+                onToggleShared();
+                setLinkOpen(false);
+              }}
+              className="mt-2 text-xs text-faint underline transition-colors hover:text-foreground"
+            >
+              turn off sharing
+            </button>
+          </div>
+        )}
+      </div>
 
       <ThemeToggle />
     </header>

@@ -124,7 +124,9 @@ function MessageRow({
           {files.map((f) => (
             <button
               key={f.id}
-              onClick={() => onOpenDoc({ status: "ready", name: f.name || "file", url: f.url })}
+              onClick={() =>
+                onOpenDoc({ status: "ready", name: f.name || "file", url: f.url, mime: f.mime })
+              }
               className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted transition-colors hover:border-border-strong hover:text-foreground"
             >
               <FileIcon />
@@ -142,6 +144,7 @@ function MessageRow({
           startedAt={msg.startedAt}
           streaming={streaming}
           toolRunning={msg.activity?.some((a) => a.status === "running")}
+          contentStarted={Boolean(msg.content)}
         />
       )}
 
@@ -289,11 +292,15 @@ export default function MessageList({
   const [showJump, setShowJump] = useState(false);
   const [zoom, setZoom] = useState(null); // { items, index }
 
-  const toBottom = (behavior = "smooth") =>
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior,
-    });
+  const toBottom = (behavior = "smooth") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // A plain scrollTop assignment is cheaper than scrollTo({behavior:"auto"}):
+    // no animation machinery to spin up and tear down every frame, which
+    // matters here since this runs on every token while streaming.
+    if (behavior === "auto") el.scrollTop = el.scrollHeight;
+    else el.scrollTo({ top: el.scrollHeight, behavior });
+  };
 
   const onScroll = () => {
     const el = scrollRef.current;

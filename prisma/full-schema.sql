@@ -68,6 +68,7 @@ CREATE TABLE "Attachment" (
     "messageId" INTEGER,
     "kind" TEXT NOT NULL,
     "mime" TEXT NOT NULL,
+    "name" TEXT,
     "width" INTEGER,
     "height" INTEGER,
     "bytes" INTEGER NOT NULL,

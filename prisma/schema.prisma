@@ -92,6 +92,9 @@ model Attachment {
   messageId Int?
   kind      String
   mime      String
+  /// Original filename, only set for non-image files (a tool's output_file
+  /// basename); images have never needed one, they render inline by id.
+  name      String?
   width     Int?
   height    Int?
   bytes     Int

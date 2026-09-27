@@ -42,7 +42,9 @@ const nextConfig = {
       "img-src 'self' data: blob:",
       "font-src 'self'",
       "connect-src 'self' https://challenges.cloudflare.com",
-      "frame-src https://challenges.cloudflare.com",
+      // 'self' lets the chat page embed its own generated-document previews
+      // (the DocPanel <iframe>, same-origin /api/attachments/*).
+      "frame-src 'self' https://challenges.cloudflare.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -61,6 +63,17 @@ const nextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
           },
+        ],
+      },
+      {
+        // Stored attachments (images, generated PDFs/docs) need to render in
+        // the chat UI's own <iframe> preview panel. Everything else stays
+        // DENY; this only relaxes framing for raw file bytes, on the same
+        // origin, nothing here executes as HTML/script.
+        source: "/api/attachments/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
     ];

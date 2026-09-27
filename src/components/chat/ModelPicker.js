@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon, CheckIcon } from "@/components/chat/icons";
-import { TIER_LABELS } from "@/lib/pricing";
+import { TIER_LABELS, MODEL_LABELS } from "@/lib/pricing";
 
 // Themed dropdown for the model selector. Replaces a native <select> so it
 // matches the rest of the UI.
@@ -11,7 +11,10 @@ export default function ModelPicker({ models, value, onChange }) {
   const ref = useRef(null);
 
   const current = models.find((m) => m.id === value);
-  const label = current?.label || value || "model";
+  // MODEL_LABELS is static, no network round trip, so the short label shows
+  // immediately, before /api/models has even resolved, instead of briefly
+  // showing the raw "provider/model-id" and then shrinking once it loads.
+  const label = current?.label || MODEL_LABELS[value] || value || "model";
 
   // preserve incoming order (already tier-sorted by /api/models); only add a
   // heading when more than one tier is present
@@ -48,7 +51,7 @@ export default function ModelPicker({ models, value, onChange }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 font-chat text-sm text-foreground transition-colors hover:border-border-strong"
+        className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 font-chat text-sm text-foreground transition-colors hover:border-border-strong"
       >
         {label}
         <span className="text-faint">
