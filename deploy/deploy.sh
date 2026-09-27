@@ -27,7 +27,13 @@ PREV_ID="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || true)
 
 echo "==> building (lint + test + next build all run inside this step)"
 docker compose build "$SERVICE"
-[ -n "$PREV_ID" ] && docker tag "$PREV_ID" "$ROLLBACK_TAG"
+
+# Best-effort: if the previous image already vanished (e.g. a first deploy,
+# or the image store already reclaimed it), that's fine, just deploy without
+# a rollback snapshot for this round rather than aborting the whole deploy.
+if [ -n "$PREV_ID" ]; then
+  docker tag "$PREV_ID" "$ROLLBACK_TAG" 2>/dev/null || echo "==> no previous image to snapshot, continuing anyway"
+fi
 
 echo "==> deploying, waiting for healthy"
 if docker compose up -d --force-recreate --wait --wait-timeout 90 "$SERVICE"; then
