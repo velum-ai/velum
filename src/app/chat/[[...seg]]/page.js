@@ -444,7 +444,7 @@ export default function ChatPage() {
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 402) setCredits(0);
+        if (res.status === 402 && typeof data.credits === "number") setCredits(data.credits);
         setMessages([
           ...base,
           {
@@ -586,7 +586,7 @@ export default function ChatPage() {
         },
       });
       if (!ok) {
-        if (status === 402) setCredits(0);
+        if (status === 402 && typeof data.credits === "number") setCredits(data.credits);
         setMessages([
           ...base,
           {
