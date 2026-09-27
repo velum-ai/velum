@@ -11,6 +11,7 @@ import MessageList from "@/components/chat/MessageList";
 import Composer from "@/components/chat/Composer";
 import CommandPalette from "@/components/chat/CommandPalette";
 import ShortcutsSheet from "@/components/chat/ShortcutsSheet";
+import DocPanel from "@/components/chat/DocPanel";
 import {
   DEFAULT_MODEL,
   STORAGE_KEY,
@@ -21,6 +22,8 @@ import {
   MAX_FILE_BYTES,
   FILE_TYPES,
 } from "@/lib/limits";
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i;
 
 function pickDefaultModel(models) {
   const cheap = models.find((m) => /nano|mini|flash|haiku|nemo/.test(m.id));
@@ -117,6 +120,7 @@ export default function ChatPage() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchScope, setSearchScope] = useState(null); // { projectId, name } | null
+  const [docPanel, setDocPanel] = useState(null); // { status, name, url? } | null
   const [length, setLength] = useState("balanced");
   const [booting, setBooting] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
@@ -462,6 +466,14 @@ export default function ChatPage() {
       for await (const json of parseSSE(res.body)) {
         if (json.toolStart) {
           activity.push({ ...json.toolStart, status: "running" });
+          if (
+            json.toolStart.name === "run_python" &&
+            json.toolStart.outputFile &&
+            !IMAGE_EXT_RE.test(json.toolStart.outputFile)
+          ) {
+            const name = json.toolStart.outputFile.split("/").pop();
+            setDocPanel({ status: "generating", name });
+          }
           paint();
         }
         if (json.toolEnd) {
@@ -485,6 +497,12 @@ export default function ChatPage() {
       if (frame != null) cancelAnimationFrame(frame);
 
       const replyContent = acc || (errored ? `_${errored}_` : "");
+
+      setDocPanel((prev) => {
+        if (!prev) return prev;
+        const doc = final?.attachments?.find((a) => !a.mime?.startsWith("image/"));
+        return doc ? { status: "ready", name: doc.name || prev.name, url: doc.url } : null;
+      });
 
       if (final) {
         setCredits(final.credits);
@@ -911,6 +929,7 @@ export default function ChatPage() {
           onRegenerate={regenerate}
           onEditMessage={editMessage}
           onRetryFailed={retryFailed}
+          onOpenDoc={setDocPanel}
         />
 
         <Composer
@@ -943,6 +962,8 @@ export default function ChatPage() {
           onLength={changeLength}
         />
       </div>
+
+      <DocPanel doc={docPanel} onClose={() => setDocPanel(null)} />
 
       <CommandPalette
         open={paletteOpen}

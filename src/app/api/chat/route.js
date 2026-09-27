@@ -284,6 +284,7 @@ async function* toolLoopEvents({ firstEvents, model, messages, tools, maxOutput,
           query: args.query,
           url: args.url,
           prompt: args.prompt,
+          outputFile: args.output_file,
         },
       };
     }
