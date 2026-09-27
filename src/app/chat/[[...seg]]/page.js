@@ -127,6 +127,10 @@ export default function ChatPage() {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const abortRef = useRef(null);
+  // Bumped on every navigation (new chat, switch chat, ...) so a stream from
+  // a chat the user has since left can tell it's stale and stop touching
+  // the now-unrelated visible messages/doc panel/URL.
+  const streamTokenRef = useRef(0);
 
   const focusComposer = () =>
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -288,6 +292,7 @@ export default function ChatPage() {
   };
 
   const startNewChat = ({ push = true, projectId = null } = {}) => {
+    streamTokenRef.current++;
     setActiveChatId(null);
     setShared(false);
     setMessages([]);
@@ -301,6 +306,7 @@ export default function ChatPage() {
   };
 
   const toggleEphemeral = () => {
+    streamTokenRef.current++;
     const next = !ephemeral;
     setEphemeral(next);
     setActiveChatId(null);
@@ -321,6 +327,7 @@ export default function ChatPage() {
   };
 
   const selectChat = async (chat, { push = true, acct = account } = {}) => {
+    streamTokenRef.current++;
     setEphemeral(false);
     setMode("chat");
     setPendingProjectId(null);
@@ -377,6 +384,9 @@ export default function ChatPage() {
   }) => {
     if (!account || sending) return;
 
+    const myToken = ++streamTokenRef.current;
+    const isCurrent = () => streamTokenRef.current === myToken;
+
     const isNewChat = !ephemeral && !activeChatId;
     const targetProjectId = pendingProjectId;
     setPendingProjectId(null);
@@ -412,13 +422,18 @@ export default function ChatPage() {
     let frame = null;
     const flush = () => {
       frame = null;
+      if (!isCurrent()) return;
       setMessages([
         ...base,
         { role: "assistant", content: acc, reasoning: reason, activity: [...activity], startedAt },
       ]);
     };
+    // Throttled well below the display's refresh rate on purpose: markdown
+    // re-renders by replacing the whole reply's HTML (see MessageList), so
+    // redoing that every single animation frame (60/s) gets visibly janky as
+    // a reply grows. ~12/s still reads as live streaming to the eye.
     const paint = () => {
-      if (frame == null) frame = requestAnimationFrame(flush);
+      if (frame == null) frame = setTimeout(flush, 80);
     };
 
     try {
@@ -449,15 +464,17 @@ export default function ChatPage() {
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
         if (res.status === 402 && typeof data.credits === "number") setCredits(data.credits);
-        setMessages([
-          ...base,
-          {
-            role: "assistant",
-            content: data.error || "something went wrong",
-            error: true,
-            retry: res.status === 402 ? null : retry,
-          },
-        ]);
+        if (isCurrent()) {
+          setMessages([
+            ...base,
+            {
+              role: "assistant",
+              content: data.error || "something went wrong",
+              error: true,
+              retry: res.status === 402 ? null : retry,
+            },
+          ]);
+        }
         return;
       }
 
@@ -472,7 +489,7 @@ export default function ChatPage() {
             !IMAGE_EXT_RE.test(json.toolStart.outputFile)
           ) {
             const name = json.toolStart.outputFile.split("/").pop();
-            setDocPanel({ status: "generating", name });
+            if (isCurrent()) setDocPanel({ status: "generating", name });
           }
           paint();
         }
@@ -494,15 +511,19 @@ export default function ChatPage() {
         if (json.error) errored = json.error;
         if (json.done) final = json;
       }
-      if (frame != null) cancelAnimationFrame(frame);
+      if (frame != null) clearTimeout(frame);
 
       const replyContent = acc || (errored ? `_${errored}_` : "");
 
-      setDocPanel((prev) => {
-        if (!prev) return prev;
-        const doc = final?.attachments?.find((a) => !a.mime?.startsWith("image/"));
-        return doc ? { status: "ready", name: doc.name || prev.name, url: doc.url } : null;
-      });
+      if (isCurrent()) {
+        setDocPanel((prev) => {
+          if (!prev) return prev;
+          const doc = final?.attachments?.find((a) => !a.mime?.startsWith("image/"));
+          return doc
+            ? { status: "ready", name: doc.name || prev.name, url: doc.url, mime: doc.mime }
+            : null;
+        });
+      }
 
       if (final) {
         setCredits(final.credits);
@@ -518,16 +539,18 @@ export default function ChatPage() {
           startedAt,
         };
         if (final.ephemeral) {
-          setMessages([...base, finalMsg]);
+          if (isCurrent()) setMessages([...base, finalMsg]);
           return;
         }
         const userMsg = { ...base[base.length - 1], id: final.userMessageId };
         const withUser = appendUser ? [...base.slice(0, -1), userMsg] : base;
         const finalMessages = [...withUser, finalMsg];
-        setMessages(finalMessages);
-        setActiveChatId(final.chatId);
-        writeLS(LAST_CHAT_KEY, final.chatId);
-        syncUrl(final.chatId, true);
+        if (isCurrent()) {
+          setMessages(finalMessages);
+          setActiveChatId(final.chatId);
+          writeLS(LAST_CHAT_KEY, final.chatId);
+          syncUrl(final.chatId, true);
+        }
         setChats((prev) =>
           sortChats([
             {
@@ -548,7 +571,7 @@ export default function ChatPage() {
             body: { account, chatId: final.chatId, projectId: targetProjectId },
           });
         }
-      } else {
+      } else if (isCurrent()) {
         setMessages([
           ...base,
           {
@@ -560,20 +583,24 @@ export default function ChatPage() {
         ]);
       }
     } catch (err) {
-      if (frame != null) cancelAnimationFrame(frame);
+      if (frame != null) clearTimeout(frame);
       if (err?.name === "AbortError") {
-        setMessages([
-          ...base,
-          { role: "assistant", content: acc, reasoning: reason || null, startedAt },
-        ]);
+        if (isCurrent()) {
+          setMessages([
+            ...base,
+            { role: "assistant", content: acc, reasoning: reason || null, startedAt },
+          ]);
+        }
         if (account) loadAccount(account);
-      } else {
+      } else if (isCurrent()) {
         setMessages([
           ...base,
           { role: "assistant", content: "something went wrong", error: true, retry },
         ]);
       }
     } finally {
+      // Always clears, even if stale: it's the only thing that resets this
+      // global busy flag, skipping it would leave the composer locked up.
       setSending(false);
       abortRef.current = null;
       focusComposer();
@@ -582,6 +609,8 @@ export default function ChatPage() {
 
   const generateImage = async (prompt, replaceFromIndex = null) => {
     if (!account || sending || outOfCredits || !prompt.trim()) return;
+    const myToken = ++streamTokenRef.current;
+    const isCurrent = () => streamTokenRef.current === myToken;
     const prior =
       replaceFromIndex != null ? messages.slice(0, replaceFromIndex) : messages;
     const base = [...prior, { role: "user", content: prompt }];
@@ -605,15 +634,17 @@ export default function ChatPage() {
       });
       if (!ok) {
         if (status === 402 && typeof data.credits === "number") setCredits(data.credits);
-        setMessages([
-          ...base,
-          {
-            role: "assistant",
-            content: data.error || "image generation failed",
-            error: true,
-            retry: status === 402 ? null : retry,
-          },
-        ]);
+        if (isCurrent()) {
+          setMessages([
+            ...base,
+            {
+              role: "assistant",
+              content: data.error || "image generation failed",
+              error: true,
+              retry: status === 402 ? null : retry,
+            },
+          ]);
+        }
         return;
       }
       setCredits(data.credits);
@@ -628,11 +659,13 @@ export default function ChatPage() {
           : { attachments: [data.attachment] }),
       };
       const finalMessages = [...base, finalMsg];
-      setMessages(finalMessages);
+      if (isCurrent()) setMessages(finalMessages);
       if (!data.ephemeral) {
-        setActiveChatId(data.chatId);
-        writeLS(LAST_CHAT_KEY, data.chatId);
-        syncUrl(data.chatId, true);
+        if (isCurrent()) {
+          setActiveChatId(data.chatId);
+          writeLS(LAST_CHAT_KEY, data.chatId);
+          syncUrl(data.chatId, true);
+        }
         setChats((prev) =>
           sortChats([
             {
@@ -648,13 +681,15 @@ export default function ChatPage() {
         );
       }
     } catch (err) {
-      if (err?.name !== "AbortError") {
+      if (err?.name !== "AbortError" && isCurrent()) {
         setMessages([
           ...base,
           { role: "assistant", content: "something went wrong", error: true, retry },
         ]);
       }
     } finally {
+      // Always clears, even if stale: it's the only thing that resets this
+      // global busy flag, skipping it would leave the composer locked up.
       setSending(false);
       abortRef.current = null;
       focusComposer();

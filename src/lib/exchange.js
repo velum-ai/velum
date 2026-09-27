@@ -164,11 +164,12 @@ export function exchangeResponse({
               kind: "generated",
               mime: f.mime,
               buffer: f.buffer,
+              name: f.name,
             });
             attachments.push({
               id: at.id,
               mime: at.mime,
-              name: f.name,
+              name: at.name,
               url: `/api/attachments/${at.id}?t=${signId(at.id)}`,
             });
           } catch (e) {

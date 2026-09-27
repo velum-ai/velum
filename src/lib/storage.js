@@ -36,6 +36,7 @@ export async function saveAttachment({
   buffer,
   width = null,
   height = null,
+  name = null,
 }) {
   await mkdir(DIR, { recursive: true });
   const row = await prisma.attachment.create({
@@ -48,6 +49,7 @@ export async function saveAttachment({
       width,
       height,
       bytes: buffer.length,
+      name,
     },
   });
   await writeFile(fileFor(row.id, mime), buffer);

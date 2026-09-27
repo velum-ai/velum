@@ -94,7 +94,7 @@ const MESSAGE_SELECT = {
   cost: true,
   reasoning: true,
   attachments: {
-    select: { id: true, mime: true, width: true, height: true },
+    select: { id: true, mime: true, width: true, height: true, name: true },
   },
 };
 
