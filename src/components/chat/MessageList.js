@@ -10,7 +10,6 @@ import {
   RefreshIcon,
   EditIcon,
   FileIcon,
-  DownloadIcon,
 } from "@/components/chat/icons";
 import ThinkingPanel from "@/components/chat/ThinkingPanel";
 import ActivityPanel from "@/components/chat/ActivityPanel";
@@ -83,6 +82,7 @@ function MessageRow({
   onEdit,
   onRetry,
   onZoom,
+  onOpenDoc,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
@@ -122,16 +122,14 @@ function MessageRow({
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {files.map((f) => (
-            <a
+            <button
               key={f.id}
-              href={f.url}
-              download={f.name}
+              onClick={() => onOpenDoc({ status: "ready", name: f.name || "file", url: f.url })}
               className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted transition-colors hover:border-border-strong hover:text-foreground"
             >
               <FileIcon />
               {f.name || "file"}
-              <DownloadIcon />
-            </a>
+            </button>
           ))}
         </div>
       )}
@@ -284,6 +282,7 @@ export default function MessageList({
   onRegenerate,
   onEditMessage,
   onRetryFailed,
+  onOpenDoc,
 }) {
   const scrollRef = useRef(null);
   const stick = useRef(true);
@@ -414,6 +413,7 @@ export default function MessageList({
                 streaming={streaming}
                 generating={!!msg.generating}
                 onZoom={(items, index) => setZoom({ items, index })}
+                onOpenDoc={onOpenDoc}
                 onRegenerate={
                   !sending && i === lastAssistant && onRegenerate
                     ? () => onRegenerate(i)
