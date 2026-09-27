@@ -25,6 +25,10 @@ git reset --hard "origin/$BRANCH"
 IMAGE="$(docker compose config --images "$SERVICE")"
 PREV_ID="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
 
+# surfaced at /account so it's obvious what's actually running on this host
+export GIT_SHA="$(git rev-parse --short HEAD)"
+export BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 echo "==> building (lint + test + next build all run inside this step)"
 docker compose build "$SERVICE"
 

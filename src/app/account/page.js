@@ -115,6 +115,7 @@ export default function AccountPage() {
   const [buyError, setBuyError] = useState("");
   const [added, setAdded] = useState(0);
   const [method, setMethod] = useState("dodo");
+  const [version, setVersion] = useState(null);
 
   const setBalance = (credits) => setData((d) => (d ? { ...d, credits } : d));
 
@@ -147,6 +148,10 @@ export default function AccountPage() {
       return;
     }
     setAccount(stored);
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then(setVersion)
+      .catch(() => {});
     api("/api/account/overview", { body: { account: stored } }).then(({ ok, status, data }) => {
       if (!ok) {
         if (status === 400) {
@@ -587,6 +592,20 @@ export default function AccountPage() {
             </button>
           </div>
         </Card>
+
+        {version && (
+          <p className="text-center text-xs text-faint">
+            {version.sha}
+            {version.builtAt &&
+              ` · built ${new Date(version.builtAt).toLocaleString(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`}
+          </p>
+        )}
       </main>
 
       <ConfirmDialog

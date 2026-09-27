@@ -24,6 +24,10 @@ services:
     env_file: [.env]
     environment:
       DATA_DIR: /data
+      # set by deploy.sh before this runs; shows in /account so it's obvious
+      # what's actually live on a given host
+      GIT_SHA: ${GIT_SHA:-dev}
+      BUILD_TIME: ${BUILD_TIME:-}
     volumes:
       - velum-data:/data # stored chat images
     stop_grace_period: 20s
