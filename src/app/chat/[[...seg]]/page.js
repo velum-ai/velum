@@ -38,7 +38,6 @@ const sortChats = (list) => [
 const HISTORY_CHAR_CAP = 24000;
 
 const DRAFT_PREFIX = "velum_draft:";
-const LENGTH_KEY = "velum_length";
 const LAST_CHAT_KEY = "velum_last_chat";
 const SIDEBAR_KEY = "velum_sidebar";
 const SIDEBAR_WIDTH_KEY = "velum_sidebar_width";
@@ -121,7 +120,6 @@ export default function ChatPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchScope, setSearchScope] = useState(null); // { projectId, name } | null
   const [docPanel, setDocPanel] = useState(null); // { status, name, url? } | null
-  const [length, setLength] = useState("balanced");
   const [booting, setBooting] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
   const inputRef = useRef(null);
@@ -243,6 +241,7 @@ export default function ChatPage() {
   }, [router]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time restore from localStorage on mount */
   useEffect(() => {
     const stored = readLS(STORAGE_KEY, "");
     if (!stored) return;
@@ -254,17 +253,13 @@ export default function ChatPage() {
       if (data.maxOutput) setMaxOutput(data.maxOutput);
       if (data.image) setImageInfo(data.image);
     });
-    const savedLen = readLS(LENGTH_KEY);
-    if (["concise", "balanced", "detailed"].includes(savedLen)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore
-      setLength(savedLen);
-    }
     if (readLS(SIDEBAR_KEY) === "hidden") setSidebarHidden(true);
     const savedWidth = Number(readLS(SIDEBAR_WIDTH_KEY));
     if (savedWidth >= 200 && savedWidth <= 420) setSidebarWidth(savedWidth);
     setInput(readLS(DRAFT_PREFIX + "new"));
     focusComposer();
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const draftKey = ephemeral ? null : DRAFT_PREFIX + (activeChatId ?? "new");
 
@@ -285,11 +280,6 @@ export default function ChatPage() {
     const t = setTimeout(() => writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)), 300);
     return () => clearTimeout(t);
   }, [sidebarWidth]);
-
-  const changeLength = (l) => {
-    setLength(l);
-    writeLS(LENGTH_KEY, l);
-  };
 
   const startNewChat = ({ push = true, projectId = null } = {}) => {
     streamTokenRef.current++;
@@ -445,7 +435,6 @@ export default function ChatPage() {
           chatId: ephemeral ? null : activeChatId,
           message: text,
           model,
-          length,
           appendUser,
           ...(imgs.length && { images: imgs }),
           ...(docs.length && { files: docs }),
@@ -993,8 +982,6 @@ export default function ChatPage() {
           onToggleMode={() => setMode((m) => (m === "image" ? "chat" : "image"))}
           imageEnabled={Boolean(imageInfo)}
           holdEstimate={holdEstimate}
-          length={length}
-          onLength={changeLength}
         />
       </div>
 

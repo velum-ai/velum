@@ -15,16 +15,6 @@ export const MARGIN = (() => {
 
 export const MAX_OUTPUT = Number(process.env.MAX_OUTPUT_TOKENS) || 4000;
 
-// Per-request reply length. The reservation always holds the worst case
-// (MAX_OUTPUT); this only lowers the upstream cap, so shorter replies just
-// settle cheaper. "detailed" is the ceiling.
-export const LENGTHS = ["concise", "balanced", "detailed"];
-export const outputCapFor = (length) => {
-  if (length === "concise") return Math.min(900, MAX_OUTPUT);
-  if (length === "detailed") return MAX_OUTPUT;
-  return Math.min(2200, MAX_OUTPUT); // balanced (default)
-};
-
 // The models a user can pick, grouped for the picker and pricing page. Ids are
 // OpenRouter `provider/model` slugs; `inUsd`/`outUsd` are OpenRouter's price in
 // USD per 1,000,000 tokens. After editing this list run `npm run sync-models`
@@ -268,11 +258,6 @@ if (process.argv[1] && process.argv[1].endsWith("pricing.js")) {
     imageCredits(),
     Math.max(1, Math.ceil((IMAGE_USD / USD_PER_CREDIT) * MARGIN)),
   );
-
-  a.ok(outputCapFor("concise") <= outputCapFor("balanced"));
-  a.ok(outputCapFor("balanced") <= outputCapFor("detailed"));
-  a.strictEqual(outputCapFor("detailed"), MAX_OUTPUT);
-  a.strictEqual(outputCapFor("anything-else"), outputCapFor("balanced"));
 
   const defaults = defaultModelIds();
   a.ok(defaults.length > 0 && defaults.length < Object.keys(MODELS).length);

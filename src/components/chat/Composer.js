@@ -10,30 +10,9 @@ import {
   MicIcon,
   FileIcon,
 } from "@/components/chat/icons";
-import { LENGTHS } from "@/lib/pricing";
 import { useDictation } from "@/lib/useDictation";
 
 const MAX_HEIGHT = 200;
-
-function LengthControl({ value, onChange }) {
-  return (
-    <span className="flex overflow-hidden rounded-md border border-border">
-      {LENGTHS.map((l) => (
-        <button
-          key={l}
-          onClick={() => onChange(l)}
-          className={`px-2 py-0.5 font-chat text-[11px] transition-colors ${
-            value === l
-              ? "bg-surface-2 text-foreground"
-              : "text-faint hover:text-muted"
-          }`}
-        >
-          {l}
-        </button>
-      ))}
-    </span>
-  );
-}
 
 export default function Composer({
   outOfCredits,
@@ -57,8 +36,6 @@ export default function Composer({
   onToggleMode,
   imageEnabled,
   holdEstimate,
-  length,
-  onLength,
 }) {
   const localRef = useRef(null);
   const ref = inputRef || localRef;
@@ -286,12 +263,7 @@ export default function Composer({
           </div>
         </div>
 
-        <div className="mt-1.5 flex items-center justify-between gap-2 font-chat text-[11px] text-faint">
-          <span className="flex items-center gap-2">
-            {!isImage && length && onLength && (
-              <LengthControl value={length} onChange={onLength} />
-            )}
-          </span>
+        <div className="mt-1.5 flex items-center justify-end gap-2 font-chat text-[11px] text-faint">
           <span className="flex items-center gap-2">
             <span className="hidden sm:inline">
               {isImage
