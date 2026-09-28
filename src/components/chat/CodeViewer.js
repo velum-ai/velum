@@ -34,6 +34,12 @@ const EXT_LANG = {
 
 const langFor = (name) => EXT_LANG[name?.split(".").pop()?.toLowerCase()] || null;
 
+// highlight.js's own name for a grammar isn't always what a user expects to
+// see (its markup grammar is internally called "xml", covering html too), so
+// the header label is keyed by the file's own extension, not the grammar name.
+const EXT_LABEL = { html: "html" };
+const labelFor = (name, lang) => EXT_LABEL[name?.split(".").pop()?.toLowerCase()] || lang;
+
 // Minimal syntax-highlighted text viewer for anything run_python hands back
 // that isn't a PDF or an image: code, csv, json, plain text. Renders with
 // the same header-bar look as fenced code blocks in chat replies.
@@ -103,7 +109,7 @@ export default function CodeViewer({ url, name }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-surface-2 px-3 py-1.5">
-        <span className="font-mono text-[11px] text-faint">{lang}</span>
+        <span className="font-mono text-[11px] text-faint">{labelFor(name, lang)}</span>
         {text != null && (
           <button
             onClick={copy}

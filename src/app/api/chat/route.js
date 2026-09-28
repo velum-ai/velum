@@ -17,7 +17,7 @@ import {
 import {
   isAllowedModel,
   worstCaseCredits,
-  outputCapFor,
+  MAX_OUTPUT,
   searchCredits,
   codeCredits,
   imageCredits,
@@ -375,7 +375,6 @@ export async function POST(req) {
     history: clientHistory,
     truncateAfterId,
     appendUser: appendUserRaw,
-    length,
   } = body;
 
   const g = await guardRequest(req, {
@@ -483,7 +482,7 @@ export async function POST(req) {
     ...(appendUser ? [{ role: "user", content: userContent }] : []),
   ];
 
-  const maxOutput = outputCapFor(length);
+  const maxOutput = MAX_OUTPUT;
   let usingTools = wantsTools;
   let upstream;
   try {
