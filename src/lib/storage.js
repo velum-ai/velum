@@ -2,10 +2,12 @@ import { mkdir, writeFile, readFile, unlink, readdir } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { logError } from "@/lib/logger";
+import { encryptBuffer, decryptBuffer } from "@/lib/crypto";
 
 // Blob storage for chat images (uploads + generated). Rows live in Postgres,
-// bytes live on disk under DATA_DIR so the database stays small. In Docker,
-// mount a volume at DATA_DIR (see docker-compose.yml).
+// bytes live on disk under DATA_DIR, encrypted with the same key as message
+// content (see crypto.js), so the database stays small. In Docker, mount a
+// volume at DATA_DIR (see docker-compose.yml).
 const DATA_DIR = process.env.DATA_DIR || "./.data";
 const DIR = path.join(DATA_DIR, "attachments");
 
@@ -52,7 +54,7 @@ export async function saveAttachment({
       name,
     },
   });
-  await writeFile(fileFor(row.id, mime), buffer);
+  await writeFile(fileFor(row.id, mime), encryptBuffer(buffer));
   return row;
 }
 
@@ -64,7 +66,7 @@ export async function readAttachment(id) {
   const row = await prisma.attachment.findUnique({ where: { id: clean } });
   if (!row) return null;
   try {
-    return { mime: row.mime, body: await readFile(fileFor(row.id, row.mime)) };
+    return { mime: row.mime, body: decryptBuffer(await readFile(fileFor(row.id, row.mime))) };
   } catch {
     return null;
   }

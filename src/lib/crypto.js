@@ -48,6 +48,25 @@ export function decryptText(stored) {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
 }
 
+// Same scheme as above but for binary attachment bytes (images, PDFs) stored
+// on disk: raw iv | tag | ciphertext, no base64, since it's written straight
+// to a file rather than a text column.
+export function encryptBuffer(plaintext) {
+  const iv = randomBytes(IV_LEN);
+  const cipher = createCipheriv(ALGO, KEY, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
+}
+
+export function decryptBuffer(stored) {
+  const iv = stored.subarray(0, IV_LEN);
+  const tag = stored.subarray(IV_LEN, IV_LEN + TAG_LEN);
+  const ciphertext = stored.subarray(IV_LEN + TAG_LEN);
+  const decipher = createDecipheriv(ALGO, KEY, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
 // self-check: npm test
 if (process.argv[1] && process.argv[1].endsWith("crypto.js")) {
   const { default: assert } = await import("node:assert");
@@ -64,6 +83,10 @@ if (process.argv[1] && process.argv[1].endsWith("crypto.js")) {
   assert.strictEqual(decryptText(encryptText("")), "");
 
   assert.throws(() => decryptText("not-valid-ciphertext"));
+
+  const bufEnc = encryptBuffer(Buffer.from([0, 1, 2, 255, 254]));
+  assert.deepStrictEqual(decryptBuffer(bufEnc), Buffer.from([0, 1, 2, 255, 254]));
+  assert.notStrictEqual(bufEnc.toString("hex"), encryptBuffer(Buffer.from([0, 1, 2, 255, 254])).toString("hex"));
 
   console.log("crypto.js self-check OK");
 }
