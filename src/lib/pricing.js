@@ -37,11 +37,11 @@ export const MODELS = {
   // efficient: cheap and fast, fine for everyday use
   "openai/gpt-5.4-nano": { inUsd: 0.2, outUsd: 1.25, tier: "efficient", default: true },
   "google/gemini-2.5-flash-lite": { inUsd: 0.1, outUsd: 0.4, tier: "efficient", default: true },
-  "deepseek/deepseek-v4-flash": { inUsd: 0.0886, outUsd: 0.1772, tier: "efficient", default: true },
+  "deepseek/deepseek-v4-flash": { inUsd: 0.14, outUsd: 0.28, tier: "efficient", default: true },
   "openai/gpt-5.6-luna": { inUsd: 0.2, outUsd: 1.2, tier: "efficient", default: true },
   "meta-llama/llama-3.3-70b-instruct": { inUsd: 0.1, outUsd: 0.32, tier: "efficient", default: true },
-  "mistralai/mistral-small-3.2-24b-instruct": { inUsd: 0.075, outUsd: 0.2, tier: "efficient", default: false },
-  "qwen/qwen3-30b-a3b-instruct-2507": { inUsd: 0.048, outUsd: 0.193, tier: "efficient", default: false },
+  "mistralai/mistral-small-3.2-24b-instruct": { inUsd: 0.0938, outUsd: 0.25, tier: "efficient", default: false },
+  "qwen/qwen3-30b-a3b-instruct-2507": { inUsd: 0.0481, outUsd: 0.193, tier: "efficient", default: false },
   "google/gemma-3-27b-it": { inUsd: 0.08, outUsd: 0.45, tier: "efficient", default: false },
 
   // flagship: top quality, higher cost
@@ -57,11 +57,11 @@ export const MODELS = {
   "openai/gpt-5.3-codex": { inUsd: 1.75, outUsd: 14, tier: "coding", default: true },
   "qwen/qwen3-coder-plus": { inUsd: 0.65, outUsd: 3.25, tier: "coding", default: true },
   "mistralai/codestral-2508": { inUsd: 0.3, outUsd: 0.9, tier: "coding", default: true },
-  "moonshotai/kimi-k2.7-code": { inUsd: 0.71, outUsd: 3.5, tier: "coding", default: true },
-  "deepseek/deepseek-v4-pro": { inUsd: 1.6, outUsd: 3.2, tier: "coding", default: true },
+  "moonshotai/kimi-k2.7-code": { inUsd: 0.6562, outUsd: 3.3, tier: "coding", default: true },
+  "deepseek/deepseek-v4-pro": { inUsd: 0.9553, outUsd: 1.9105, tier: "coding", default: true },
   "openai/gpt-5.1-codex-mini": { inUsd: 0.25, outUsd: 2, tier: "coding", default: false },
   "qwen/qwen3-coder": { inUsd: 0.3, outUsd: 1, tier: "coding", default: false },
-  "z-ai/glm-4.7": { inUsd: 0.4, outUsd: 1.75, tier: "coding", default: false },
+  "z-ai/glm-4.7": { inUsd: 0.6, outUsd: 2.2, tier: "coding", default: false },
 
   // vision: strong on image input
   "google/gemini-2.5-flash": { inUsd: 0.3, outUsd: 2.5, tier: "vision", default: true },
@@ -74,7 +74,7 @@ export const MODELS = {
 
   // longContext: very large context windows
   "x-ai/grok-4.20": { inUsd: 1.25, outUsd: 2.5, tier: "longContext", default: true },
-  "moonshotai/kimi-k3": { inUsd: 2.648, outUsd: 13.283, tier: "longContext", default: true },
+  "moonshotai/kimi-k3": { inUsd: 3, outUsd: 15, tier: "longContext", default: true },
   "qwen/qwen-plus": { inUsd: 0.26, outUsd: 0.78, tier: "longContext", default: true },
   "z-ai/glm-5.3": { inUsd: 1.4, outUsd: 4.4, tier: "longContext", default: true },
   "thedrummer/unslopnemo-12b": { inUsd: 0.4, outUsd: 0.4, tier: "longContext", default: true },

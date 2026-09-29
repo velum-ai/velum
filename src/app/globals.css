@@ -71,6 +71,17 @@
     border-radius: 4px;
   }
 
+  /* text fields get their own border/background treatment for focus (see
+     each component's outline-none + focus:border-* classes), never a ring
+     or the browser's native outline, on any focus state */
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border-strong) transparent;

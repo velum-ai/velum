@@ -13,7 +13,6 @@ import {
   SignOutIcon,
   UserIcon,
   FolderIcon,
-  ChevronDownIcon,
 } from "@/components/chat/icons";
 
 const MENU_HEIGHT = 108; // three rows - used to decide whether to flip upward
@@ -55,12 +54,9 @@ export default function Sidebar({
   onRenameChat,
   onRemoveChat,
   onTogglePin,
-  onCreateProject,
-  onRenameProject,
-  onRemoveProject,
   onMoveChatToProject,
-  onNewChatInProject,
-  onSearchProject,
+  onOpenProject,
+  onOpenProjects,
   width,
   onResize,
   account,
@@ -74,16 +70,9 @@ export default function Sidebar({
 }) {
   const [menuChat, setMenuChat] = useState(null);
   const [moveChat, setMoveChat] = useState(null);
-  const [collapsed, setCollapsed] = useState({});
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [editingProjectId, setEditingProjectId] = useState(null);
-  const [editProjectName, setEditProjectName] = useState("");
-  const [projectMenu, setProjectMenu] = useState(null);
   const [draggingChatId, setDraggingChatId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const menuButtonRefs = useRef({});
-  const projectMenuButtonRefs = useRef({});
 
   const dragProps = (chat) => ({
     draggable: true,
@@ -137,28 +126,6 @@ export default function Sidebar({
     window.addEventListener("resize", closeMenu);
     return () => window.removeEventListener("resize", closeMenu);
   }, [menuChat]);
-
-  const openProjectMenu = (project) => {
-    const btn = projectMenuButtonRefs.current[project.id];
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const right = window.innerWidth - rect.right;
-    setProjectMenu({ id: project.id, right, top: rect.bottom + 4 });
-  };
-  const closeProjectMenu = () => setProjectMenu(null);
-
-  const submitNewProject = () => {
-    const name = newProjectName.trim();
-    setCreatingProject(false);
-    setNewProjectName("");
-    if (name) onCreateProject?.(name);
-  };
-
-  const submitProjectRename = (projectId) => {
-    const name = editProjectName.trim();
-    setEditingProjectId(null);
-    if (name) onRenameProject?.(projectId, name);
-  };
 
   const pickChat = (chat) => {
     onSelectChat(chat);
@@ -245,121 +212,39 @@ export default function Sidebar({
         <p className="px-2 py-3 text-xs text-faint">no chats yet</p>
       )}
 
-      {(pinned.length > 0 || draggingChatId) && (
-        <div>
-          <p
-            {...pinDropProps}
-            className={`${sectionLabel} rounded-md transition-colors ${
-              dropTarget === "pin" ? "bg-surface-2 ring-1 ring-border-strong" : ""
-            }`}
-          >
-            pinned
-          </p>
-          <div className="space-y-0.5">
-            {pinned.length > 0 ? (
-              pinned.map(renderChatRow)
-            ) : (
-              <p className="px-3 py-1.5 text-xs text-faint">drop a chat here to pin it</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {projects.map((project) => {
-        const projectChats = chats.filter((c) => c.projectId === project.id && !c.pinned);
-        const isCollapsed = collapsed[project.id];
-        const isDropTarget = dropTarget === project.id;
-        return (
-          <div key={project.id}>
-            <div
-              {...dropProps(project.id)}
-              className={`group/proj flex items-center rounded-md transition-colors ${
-                isDropTarget ? "bg-surface-2 ring-1 ring-border-strong" : ""
-              }`}
-            >
-              {editingProjectId === project.id ? (
-                <input
-                  autoFocus
-                  value={editProjectName}
-                  onChange={(e) => setEditProjectName(e.target.value)}
-                  onBlur={() => submitProjectRename(project.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submitProjectRename(project.id);
-                    if (e.key === "Escape") setEditingProjectId(null);
-                  }}
-                  className="w-full rounded-md bg-surface-2 px-3 py-1.5 text-xs outline-none"
-                />
-              ) : (
-                <>
-                  <button
-                    onClick={() =>
-                      setCollapsed((prev) => ({ ...prev, [project.id]: !prev[project.id] }))
-                    }
-                    className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-faint transition-colors hover:text-foreground"
-                  >
-                    <FolderIcon />
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide">
-                      {project.name}
-                    </span>
-                    <span className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}>
-                      <ChevronDownIcon />
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => onSearchProject?.(project)}
-                    title="search this project"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
-                  >
-                    <SearchIcon />
-                  </button>
-                  <button
-                    onClick={() => onNewChatInProject?.(project.id)}
-                    title="new chat in this project"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
-                  >
-                    <PlusIcon />
-                  </button>
-                  <button
-                    ref={(el) => (projectMenuButtonRefs.current[project.id] = el)}
-                    onClick={() =>
-                      projectMenu?.id === project.id ? closeProjectMenu() : openProjectMenu(project)
-                    }
-                    title="project options"
-                    className="mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-faint opacity-100 transition-colors hover:bg-surface-2 hover:text-foreground md:opacity-0 md:focus-visible:opacity-100 md:group-hover/proj:opacity-100"
-                  >
-                    <MoreIcon />
-                  </button>
-                </>
-              )}
+      <div>
+        <p
+          {...pinDropProps}
+          className={`${sectionLabel} rounded-md transition-colors ${
+            dropTarget === "pin" ? "bg-surface-2 ring-1 ring-border-strong" : ""
+          }`}
+        >
+          pinned
+        </p>
+        <div className="space-y-0.5">
+          {pinned.length > 0 ? (
+            pinned.map(renderChatRow)
+          ) : (
+            <div className="mx-2 grid h-8 place-items-center rounded-md border border-dashed border-border text-faint">
+              <PinIcon />
             </div>
-            {!isCollapsed && (
-              <div className="space-y-0.5">
-                {projectChats.length === 0 ? (
-                  <p className="px-3 py-1.5 text-xs text-faint">empty</p>
-                ) : (
-                  projectChats.map(renderChatRow)
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          )}
+        </div>
+      </div>
 
       {ungrouped.length > 0 && (
         <div>
-          {(pinned.length > 0 || projects.length > 0) && (
-            <p
-              {...dropProps("recents", (chatId) => {
-                onMoveChatToProject(chatId, null);
-                onTogglePin(chatId, false);
-              })}
-              className={`${sectionLabel} rounded-md transition-colors ${
-                dropTarget === "recents" ? "bg-surface-2 ring-1 ring-border-strong" : ""
-              }`}
-            >
-              recents
-            </p>
-          )}
+          <p
+            {...dropProps("recents", (chatId) => {
+              onMoveChatToProject(chatId, null);
+              onTogglePin(chatId, false);
+            })}
+            className={`${sectionLabel} rounded-md transition-colors ${
+              dropTarget === "recents" ? "bg-surface-2 ring-1 ring-border-strong" : ""
+            }`}
+          >
+            recents
+          </p>
           <div className="space-y-0.5">{ungrouped.map(renderChatRow)}</div>
         </div>
       )}
@@ -401,29 +286,16 @@ export default function Sidebar({
           <PlusIcon />
           new chat
         </button>
-        {creatingProject ? (
-          <input
-            autoFocus
-            value={newProjectName}
-            onChange={(e) => setNewProjectName(e.target.value)}
-            onBlur={submitNewProject}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitNewProject();
-              if (e.key === "Escape") {
-                setCreatingProject(false);
-                setNewProjectName("");
-              }
-            }}
-            placeholder="project name"
-            className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none"
-          />
-        ) : (
+        {onOpenProjects && (
           <button
-            onClick={() => setCreatingProject(true)}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-faint transition-colors hover:text-foreground"
+            onClick={() => {
+              onOpenProjects();
+              onCloseMobile?.();
+            }}
+            className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted transition-colors hover:border-border-strong hover:text-foreground"
           >
             <FolderIcon />
-            new project
+            projects
           </button>
         )}
       </div>
@@ -625,38 +497,6 @@ export default function Sidebar({
           document.body,
         )}
 
-      {projectMenu &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-[60]" onClick={closeProjectMenu} />
-            <div
-              style={{ right: projectMenu.right, top: projectMenu.top }}
-              className="fixed z-[70] w-32 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-xl"
-            >
-              <button
-                onClick={() => {
-                  const p = projects.find((p) => p.id === projectMenu.id);
-                  setEditingProjectId(projectMenu.id);
-                  setEditProjectName(p?.name || "");
-                  closeProjectMenu();
-                }}
-                className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                rename
-              </button>
-              <button
-                onClick={() => {
-                  onRemoveProject(projectMenu.id);
-                  closeProjectMenu();
-                }}
-                className="block w-full px-3 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                delete
-              </button>
-            </div>
-          </>,
-          document.body,
-        )}
     </>
   );
 }

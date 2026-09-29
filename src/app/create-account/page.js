@@ -95,8 +95,8 @@ export default function CreateAccountPage() {
                   create an account
                 </h1>
                 <p className="leading-7 text-muted">
-                  no email, no phone, no name. you get a 16-digit number that is
-                  your whole identity here. add credit and start chatting.{" "}
+                  takes a few seconds, nothing to fill in. add credit
+                  afterward and start chatting.{" "}
                   <Link href="/login" className="underline hover:text-foreground">
                     already have one?
                   </Link>

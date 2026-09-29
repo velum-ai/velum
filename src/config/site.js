@@ -20,16 +20,27 @@ export const site = {
   url: normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL, "https://velum.run"),
 
   github: "https://github.com/velum-ai/velum",
+  twitter: "https://x.com/usevelum",
 };
 
-export const navigation = [
-  { label: "pricing", href: "/pricing" },
-  { label: "faq", href: "/faq" },
-  { label: "login", href: "/login" },
+export const footerCategories = [
+  {
+    label: "product",
+    links: [
+      { label: "pricing", href: "/pricing" },
+      { label: "faq", href: "/faq" },
+    ],
+  },
+  {
+    label: "legal",
+    links: [
+      { label: "privacy", href: "/privacy" },
+      { label: "terms", href: "/terms" },
+    ],
+  },
 ];
 
-export const footerNavigation = [
-  { label: "privacy", href: "/privacy" },
-  { label: "terms", href: "/terms" },
-  { label: "github", href: site.github },
+export const social = [
+  { label: "github", href: site.github, icon: "github" },
+  { label: "twitter", href: site.twitter, icon: "twitter" },
 ];

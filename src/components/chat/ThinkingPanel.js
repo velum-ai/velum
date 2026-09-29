@@ -9,7 +9,7 @@ const secsSince = (t) => (t ? Math.max(0, Math.round((Date.now() - t) / 1000)) :
 // long wait doesn't feel stuck on one static word.
 const STATUS_WORDS = [
   "thinking",
-  "working on it",
+  "working",
   "processing",
   "reasoning",
   "connecting the dots",

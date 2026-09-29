@@ -20,7 +20,25 @@ const SUGGESTIONS = [
   "draft a polite but firm email",
   "find the bug in this snippet",
   "plan my week around 3 priorities",
+  "summarize this in three bullet points",
+  "come up with names for a side project",
+  "turn this into a step-by-step guide",
+  "write a short bio for my profile",
+  "compare two options and recommend one",
+  "rewrite this to sound more casual",
+  "brainstorm gift ideas for a friend",
+  "explain the tradeoffs of a decision",
 ];
+
+const pickSuggestions = (n) => {
+  const pool = [...SUGGESTIONS];
+  const picked = [];
+  while (picked.length < n && pool.length) {
+    const i = Math.floor(Math.random() * pool.length);
+    picked.push(pool.splice(i, 1)[0]);
+  }
+  return picked;
+};
 
 function IconButton({ onClick, title, children }) {
   return (
@@ -291,6 +309,14 @@ export default function MessageList({
   const stick = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const [zoom, setZoom] = useState(null); // { items, index }
+  // Fixed slice on first render (server and client must match), randomized
+  // client-side after that, re-picked every time a new empty chat shows up.
+  const [suggestions, setSuggestions] = useState(() => SUGGESTIONS.slice(0, 4));
+  const isEmpty = messages.length === 0;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-roll the suggestion set client-side whenever a new empty chat shows up
+    if (isEmpty) setSuggestions(pickSuggestions(4));
+  }, [isEmpty]);
 
   const toBottom = (behavior = "smooth") => {
     const el = scrollRef.current;
@@ -358,15 +384,15 @@ export default function MessageList({
             <h1 className="font-chat text-2xl font-medium tracking-tight">
               {ephemeral ? "temporary chat" : "what can i help with?"}
             </h1>
-            <p className="font-chat text-sm text-muted">
-              {ephemeral
-                ? "this chat is not saved and won't appear in your history."
-                : "not linked to any identity."}
-            </p>
+            {ephemeral && (
+              <p className="font-chat text-sm text-muted">
+                this chat is not saved and won&apos;t appear in your history.
+              </p>
+            )}
           </div>
           {!ephemeral && (
             <div className="grid w-full gap-2 sm:grid-cols-2">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   onClick={() => onPickSuggestion?.(s)}

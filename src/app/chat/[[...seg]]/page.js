@@ -9,6 +9,7 @@ import Sidebar from "@/components/chat/Sidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import Composer from "@/components/chat/Composer";
+import ProjectsView from "@/components/chat/ProjectsView";
 import CommandPalette from "@/components/chat/CommandPalette";
 import ShortcutsSheet from "@/components/chat/ShortcutsSheet";
 import DocPanel from "@/components/chat/DocPanel";
@@ -82,11 +83,27 @@ function detectImagePrompt(text) {
 
 const idFromPath = (p) => (p && p.startsWith("/chat/") ? p.slice(6) : null);
 
+// /chat/projects or /chat/projects/<id> - the dedicated projects view, kept
+// out of idFromPath's chat-id parsing above.
+const projectsPathInfo = (p) => {
+  if (!p) return null;
+  if (p === "/chat/projects") return { projectId: null };
+  const m = p.match(/^\/chat\/projects\/([^/]+)$/);
+  return m ? { projectId: m[1] } : null;
+};
+
 // reflect the open thread in the URL without a Next navigation (the whole
 // /chat/* tree is one route, so the page never remounts)
 const syncUrl = (id, replace = false) => {
   if (typeof window === "undefined") return;
   const path = id ? `/chat/${id}` : "/chat";
+  if (window.location.pathname === path) return;
+  window.history[replace ? "replaceState" : "pushState"]({}, "", path);
+};
+
+const syncProjectsUrl = (projectId, replace = false) => {
+  if (typeof window === "undefined") return;
+  const path = projectId ? `/chat/projects/${projectId}` : "/chat/projects";
   if (window.location.pathname === path) return;
   window.history[replace ? "replaceState" : "pushState"]({}, "", path);
 };
@@ -98,6 +115,8 @@ export default function ChatPage() {
   const [chats, setChats] = useState([]);
   const [projects, setProjects] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const [view, setView] = useState("chat"); // "chat" | "projects"
+  const [activeProjectId, setActiveProjectId] = useState(null);
   const [shared, setShared] = useState(false);
   const [models, setModels] = useState([]);
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -208,8 +227,16 @@ export default function ChatPage() {
     }
     setAccount(stored);
 
+    const pv = projectsPathInfo(window.location.pathname);
+    if (pv) {
+      setView("projects");
+      setActiveProjectId(pv.projectId);
+    }
+
     // the URL wins over the remembered thread; either may be absent
-    const wanted = idFromPath(window.location.pathname) || readLS(LAST_CHAT_KEY, "");
+    const wanted = !pv
+      ? idFromPath(window.location.pathname) || readLS(LAST_CHAT_KEY, "")
+      : null;
     if (!wanted) setBooting(false); // fresh chat: show the empty state now
 
     // one round trip: balance + chat list + the wanted thread's messages
@@ -227,6 +254,7 @@ export default function ChatPage() {
         if (typeof data.credits === "number") setCredits(data.credits);
         if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
         if (Array.isArray(data.projects)) setProjects(data.projects);
+        if (pv) return; // projects view: leave the chat thread/URL alone
         if (data.chat) {
           setActiveChatId(data.chat.id);
           setMessages(data.chat.messages || []);
@@ -283,6 +311,7 @@ export default function ChatPage() {
 
   const startNewChat = ({ push = true, projectId = null } = {}) => {
     streamTokenRef.current++;
+    setView("chat");
     setActiveChatId(null);
     setShared(false);
     setMessages([]);
@@ -293,6 +322,13 @@ export default function ChatPage() {
     setPendingProjectId(projectId);
     if (push) syncUrl(null);
     focusComposer();
+  };
+
+  const openProjects = (projectId = null, { push = true } = {}) => {
+    streamTokenRef.current++;
+    setView("projects");
+    setActiveProjectId(projectId);
+    if (push) syncProjectsUrl(projectId);
   };
 
   const toggleEphemeral = () => {
@@ -318,6 +354,7 @@ export default function ChatPage() {
 
   const selectChat = async (chat, { push = true, acct = account } = {}) => {
     streamTokenRef.current++;
+    setView("chat");
     setEphemeral(false);
     setMode("chat");
     setPendingProjectId(null);
@@ -342,9 +379,16 @@ export default function ChatPage() {
     }
   };
 
-  // back / forward between threads
+  // back / forward between threads (and the dedicated projects view)
   useEffect(() => {
     const onPop = () => {
+      const pv = projectsPathInfo(window.location.pathname);
+      if (pv) {
+        setView("projects");
+        setActiveProjectId(pv.projectId);
+        return;
+      }
+      setView("chat");
       const id = idFromPath(window.location.pathname);
       if (id === activeChatId) return;
       if (!id) return startNewChat({ push: false });
@@ -900,18 +944,12 @@ export default function ChatPage() {
         onRenameChat={renameChat}
         onRemoveChat={removeChat}
         onTogglePin={togglePin}
-        onCreateProject={createProject}
-        onRenameProject={renameProject}
-        onRemoveProject={removeProject}
         onMoveChatToProject={moveChatToProject}
-        onNewChatInProject={(projectId) => {
-          startNewChat({ projectId });
+        onOpenProject={(project) => {
+          openProjects(project.id);
           setSidebarOpen(false);
         }}
-        onSearchProject={(project) => {
-          setSearchScope({ projectId: project.id, name: project.name });
-          setPaletteOpen(true);
-        }}
+        onOpenProjects={() => openProjects(null)}
         width={sidebarWidth}
         onResize={setSidebarWidth}
         account={account}
@@ -920,6 +958,7 @@ export default function ChatPage() {
         onSearch={() => {
           setSearchScope(null);
           setPaletteOpen(true);
+          setSidebarOpen(false);
         }}
         desktopHidden={sidebarHidden}
         onToggleDesktop={() => setSidebarHiddenPersist(true)}
@@ -941,48 +980,72 @@ export default function ChatPage() {
           chatId={ephemeral ? null : activeChatId}
           shared={shared}
           onToggleShared={toggleShared}
+          minimal={view === "projects"}
         />
 
-        <MessageList
-          messages={messages}
-          sending={sending}
-          loading={booting || loadingChat}
-          ephemeral={ephemeral}
-          activeChatId={activeChatId}
-          onPickSuggestion={pickSuggestion}
-          onRegenerate={regenerate}
-          onEditMessage={editMessage}
-          onRetryFailed={retryFailed}
-          onOpenDoc={setDocPanel}
-        />
+        {view === "projects" ? (
+          <ProjectsView
+            projects={projects}
+            chats={chats}
+            activeProjectId={activeProjectId}
+            onOpenProject={(project) => openProjects(project.id)}
+            onSelectChat={selectChat}
+            onCreateProject={createProject}
+            onRenameProject={renameProject}
+            onRemoveProject={(id) => {
+              removeProject(id);
+              if (activeProjectId === id) openProjects(null);
+            }}
+            onNewChatInProject={(projectId) => startNewChat({ projectId })}
+            onSearchProject={(project) => {
+              setSearchScope({ projectId: project.id, name: project.name });
+              setPaletteOpen(true);
+            }}
+          />
+        ) : (
+          <>
+            <MessageList
+              messages={messages}
+              sending={sending}
+              loading={booting || loadingChat}
+              ephemeral={ephemeral}
+              activeChatId={activeChatId}
+              onPickSuggestion={pickSuggestion}
+              onRegenerate={regenerate}
+              onEditMessage={editMessage}
+              onRetryFailed={retryFailed}
+              onOpenDoc={setDocPanel}
+            />
 
-        <Composer
-          outOfCredits={outOfCredits}
-          credits={credits}
-          images={images}
-          onRemoveImage={(i) =>
-            setImages((prev) => prev.filter((_, j) => j !== i))
-          }
-          files={files}
-          onRemoveFile={(i) =>
-            setFiles((prev) => prev.filter((_, j) => j !== i))
-          }
-          input={input}
-          onInputChange={setInput}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          sending={sending}
-          onStop={stopGeneration}
-          onSend={onSend}
-          fileInputRef={fileInputRef}
-          onFilesSelected={handleFiles}
-          fileAccept={[...IMAGE_TYPES, ...FILE_TYPES].join(",")}
-          inputRef={inputRef}
-          mode={mode}
-          onToggleMode={() => setMode((m) => (m === "image" ? "chat" : "image"))}
-          imageEnabled={Boolean(imageInfo)}
-          holdEstimate={holdEstimate}
-        />
+            <Composer
+              outOfCredits={outOfCredits}
+              credits={credits}
+              images={images}
+              onRemoveImage={(i) =>
+                setImages((prev) => prev.filter((_, j) => j !== i))
+              }
+              files={files}
+              onRemoveFile={(i) =>
+                setFiles((prev) => prev.filter((_, j) => j !== i))
+              }
+              input={input}
+              onInputChange={setInput}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              sending={sending}
+              onStop={stopGeneration}
+              onSend={onSend}
+              fileInputRef={fileInputRef}
+              onFilesSelected={handleFiles}
+              fileAccept={[...IMAGE_TYPES, ...FILE_TYPES].join(",")}
+              inputRef={inputRef}
+              mode={mode}
+              onToggleMode={() => setMode((m) => (m === "image" ? "chat" : "image"))}
+              imageEnabled={Boolean(imageInfo)}
+              holdEstimate={holdEstimate}
+            />
+          </>
+        )}
       </div>
 
       <DocPanel doc={docPanel} onClose={() => setDocPanel(null)} />
