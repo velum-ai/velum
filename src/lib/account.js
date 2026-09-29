@@ -53,6 +53,19 @@ const titleFrom = (text) => {
 
 export const isValidAccountFormat = (s) => ACCOUNT_RE.test(String(s ?? ""));
 
+// Read-only existence check, nothing is written. Lets a client-generated
+// candidate be confirmed free before it's shown as "your account number",
+// without reserving it - createAccount still retries on collision as the
+// final guarantee.
+export async function accountNumberAvailable(number) {
+  if (!isValidAccountFormat(number)) return false;
+  const acc = await prisma.account.findUnique({
+    where: { number },
+    select: { number: true },
+  });
+  return !acc;
+}
+
 // preferredNumber lets a caller claim a specific number it already showed
 // the user (e.g. one generated client-side and displayed before the account
 // exists), so the number people see is the number they get. Falls back to a

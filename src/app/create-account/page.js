@@ -42,26 +42,40 @@ export default function CreateAccountPage() {
     if (started.current) return;
     started.current = true;
 
-    let number = "";
-    try {
-      number = sessionStorage.getItem(CANDIDATE_KEY) || "";
-    } catch {
-      // storage blocked - fall through to generating a new candidate
-    }
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 700));
 
-    if (!number) {
-      number = randomAccountNumber();
+    (async () => {
+      let number = "";
       try {
-        sessionStorage.setItem(CANDIDATE_KEY, number);
+        number = sessionStorage.getItem(CANDIDATE_KEY) || "";
       } catch {
-        // storage blocked - refresh will just roll a new candidate
+        // storage blocked - fall through to generating a new candidate
       }
-    }
 
-    setTimeout(() => {
+      if (!number) {
+        // ask the server to confirm a freshly rolled candidate is actually
+        // free before ever showing it, without reserving it - a few tries
+        // in case of a (near-impossible) collision
+        for (let attempt = 0; attempt < 5 && !number; attempt++) {
+          const tryNumber = randomAccountNumber();
+          const { ok, data } = await api("/api/account/check", {
+            body: { number: tryNumber },
+          });
+          if (ok && data.available) number = tryNumber;
+        }
+        if (!number) number = randomAccountNumber(); // checks exhausted, createAccount still retries on collision
+
+        try {
+          sessionStorage.setItem(CANDIDATE_KEY, number);
+        } catch {
+          // storage blocked - refresh will just roll a new candidate
+        }
+      }
+
+      await minDelay;
       setCandidate(number);
       setPhase("ready");
-    }, 700);
+    })();
   }, []);
 
   const copy = async () => {
