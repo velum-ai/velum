@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ThemeToggle from "@/components/ThemeToggle";
 import {
+  ArrowLeftIcon,
   EyeIcon,
   EyeOffIcon,
   CopyIcon,
@@ -121,6 +123,11 @@ export default function AccountPage() {
   // Once the user touches model toggles, a slower/duplicate initial overview
   // fetch landing late must not clobber their edit with the pre-edit list.
   const modelsEdited = useRef(false);
+  // Toggling two models in quick succession fires two PATCHes that can
+  // resolve out of order; only the response for the most recently sent
+  // request is allowed to sync back, so a stale one can't revert a newer
+  // toggle (the "sometimes reverts back" bug).
+  const modelReqRef = useRef(0);
 
   const toggleModel = async (id) => {
     modelsEdited.current = true;
@@ -130,11 +137,12 @@ export default function AccountPage() {
       : [...current, id];
     if (next.length === 0) return; // at least one model must stay enabled
     setData((d) => (d ? { ...d, enabledModels: next } : d));
+    const myReq = ++modelReqRef.current;
     const { ok, data: res } = await api("/api/account", {
       method: "PATCH",
       body: { account, enabledModels: next },
     });
-    if (ok && res.enabledModels) {
+    if (ok && res.enabledModels && modelReqRef.current === myReq) {
       setData((d) => (d ? { ...d, enabledModels: res.enabledModels } : d));
     }
   };
@@ -293,9 +301,15 @@ export default function AccountPage() {
     <>
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10">
         <div className="mb-1 flex items-center gap-3">
-          <h1 className="flex-1 text-xl font-medium tracking-tight sm:text-2xl">
-            account
-          </h1>
+          <Link
+            href="/chat"
+            title="back to chat"
+            aria-label="back to chat"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted transition-colors hover:text-foreground"
+          >
+            <ArrowLeftIcon />
+          </Link>
+          <div className="flex-1" />
           <ThemeToggle />
         </div>
 

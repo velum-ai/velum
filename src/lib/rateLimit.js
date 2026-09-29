@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 // Fixed-window limiter backed by the RateLimit table: one atomic upsert per
 // call, durable across restarts, shared by every app instance. The window
 // resets in-place when the stored one has expired.
+//
+// DISABLE_RATE_LIMIT=true skips the check entirely - local dev only, never
+// set this in production.
 export async function checkRateLimit(key, { limit, windowMs }) {
+  if (process.env.DISABLE_RATE_LIMIT === "true") return { allowed: true };
+
   const cutoff = new Date(Date.now() - windowMs);
   const [row] = await prisma.$queryRaw`
     INSERT INTO "RateLimit" ("key", "windowStart", "count")

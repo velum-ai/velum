@@ -28,7 +28,8 @@ export async function POST(req) {
     );
   }
 
-  const account = await createAccount();
+  const body = await req.json().catch(() => ({}));
+  const account = await createAccount(body.number);
   log("account_created", { account: maskAccount(account) });
   return NextResponse.json({ account });
 }

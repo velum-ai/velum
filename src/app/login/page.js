@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RedirectIfSignedIn from "@/components/RedirectIfSignedIn";
@@ -64,35 +63,18 @@ export default function SignInPage() {
           onSubmit={handleSubmit}
           className="flex w-full flex-col gap-6 rounded-lg border border-border p-5 sm:p-7"
         >
-          <div className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-[0.12em] text-faint">
-              sign in
-            </p>
-
-            <h1 className="text-2xl font-medium tracking-tight sm:text-3xl">
-              enter your account number
-            </h1>
-
-            <p className="leading-7 text-muted">
-              the 16-digit number from when you created your account. don’t have
-              one yet?{" "}
-              <Link
-                href="/create-account"
-                className="underline hover:text-foreground"
-              >
-                create an account
-              </Link>
-              .
-            </p>
-          </div>
+          <h1 className="whitespace-nowrap text-center text-lg font-medium tracking-tight sm:text-2xl">
+            enter your account number
+          </h1>
 
           <input
             type="text"
             inputMode="numeric"
+            autoComplete="off"
             value={value}
             onChange={(e) => setValue(formatAccountInput(e.target.value))}
             placeholder="0000 0000 0000 0000"
-            className="w-full border border-border bg-transparent px-2 py-3 text-center text-base tracking-[0.1em] outline-none sm:px-4 sm:text-xl sm:tracking-[0.2em]"
+            className="w-full rounded-md border border-border bg-transparent px-2 py-3 text-center text-base tracking-[0.1em] outline-none focus:border-border-strong sm:px-4 sm:text-xl sm:tracking-[0.2em]"
           />
 
           {error && <p className="text-sm text-muted">{error}</p>}
@@ -100,7 +82,7 @@ export default function SignInPage() {
           <button
             type="submit"
             disabled={loading || !value.trim()}
-            className="border border-foreground bg-foreground px-5 py-2.5 text-background transition-colors hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-foreground bg-foreground px-5 py-2.5 text-background transition-colors hover:bg-background hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? "checking..." : "sign in"}
           </button>
