@@ -53,16 +53,25 @@ const titleFrom = (text) => {
 
 export const isValidAccountFormat = (s) => ACCOUNT_RE.test(String(s ?? ""));
 
-export async function createAccount() {
+// preferredNumber lets a caller claim a specific number it already showed
+// the user (e.g. one generated client-side and displayed before the account
+// exists), so the number people see is the number they get. Falls back to a
+// fresh random one if the preferred number is malformed or already taken.
+export async function createAccount(preferredNumber) {
+  let number = isValidAccountFormat(preferredNumber)
+    ? preferredNumber
+    : randomAccountNumber();
+
   for (;;) {
     try {
-      const { number } = await prisma.account.create({
-        data: { number: randomAccountNumber(), credits: STARTING_CREDITS },
+      const created = await prisma.account.create({
+        data: { number, credits: STARTING_CREDITS },
         select: { number: true },
       });
-      return number;
+      return created.number;
     } catch (err) {
       if (err.code !== "P2002") throw err; // retry only on id collision
+      number = randomAccountNumber();
     }
   }
 }

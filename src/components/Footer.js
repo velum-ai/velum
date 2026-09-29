@@ -4,7 +4,7 @@ import { footerCategories, social } from "@/config/site";
 export default function Footer() {
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-wrap justify-center gap-x-32 gap-y-8 px-4 py-10 sm:px-6">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-6 px-4 py-8 sm:flex sm:flex-wrap sm:justify-center sm:gap-x-32 sm:gap-y-8 sm:px-6 sm:py-10">
         {footerCategories.map((category) => (
           <nav key={category.label} className="flex flex-col gap-2.5 text-sm">
             <span className="text-xs uppercase tracking-[0.12em] text-faint">

@@ -1,8 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Header() {
+  const pathname = usePathname();
+  const showLogin = pathname !== "/login" && pathname !== "/create-account";
+
   return (
     <header className="border-b border-border">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -14,7 +20,17 @@ export default function Header() {
           <Logo className="h-6 w-6" />
         </Link>
 
-        <ThemeToggle />
+        <div className="flex items-center gap-4">
+          {showLogin && (
+            <Link
+              href="/login"
+              className="text-sm text-muted transition-colors hover:text-foreground"
+            >
+              login
+            </Link>
+          )}
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );
