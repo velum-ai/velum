@@ -28,56 +28,13 @@ const nextConfig = {
 
   poweredByHeader: false,
 
-  // Baseline security headers. A reverse proxy may override or extend these.
-  // CSP allows inline (Next needs it) plus the Turnstile origin. Dodo Payments
-  // checkout is a full-page `location` redirect to their domain, which CSP does
-  // not gate, so it needs no entry here. 'unsafe-eval' is added only outside
-  // production, where React dev needs it.
-  async headers() {
-    const dev = process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : "";
-    const csp = [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${dev} https://challenges.cloudflare.com`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      "connect-src 'self' https://challenges.cloudflare.com",
-      // 'self' lets the chat page embed its own generated-document previews
-      // (the DocPanel <iframe>, same-origin /api/attachments/*).
-      "frame-src 'self' https://challenges.cloudflare.com",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; ");
-
-    return [
-      {
-        source: "/:path*",
-        headers: [
-          { key: "Content-Security-Policy", value: csp },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
-          },
-        ],
-      },
-      {
-        // Stored attachments (images, generated PDFs/docs) need to render in
-        // the chat UI's own <iframe> preview panel. Everything else stays
-        // DENY; this only relaxes framing for raw file bytes, on the same
-        // origin, nothing here executes as HTML/script.
-        source: "/api/attachments/:path*",
-        headers: [
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
-        ],
-      },
-    ];
-  },
+  // Security headers (CSP, X-Frame-Options, etc.) are set by the reverse
+  // proxy (Caddy) in front of this app, not here, see deploy/Caddyfile.example.
+  // Setting them in both places sends duplicate/conflicting header lines
+  // for the same name, and browsers resolve that unpredictably (X-Frame-
+  // Options in particular: a conflicting pair is treated as the most
+  // restrictive value, which broke the DocPanel's same-origin iframe
+  // preview even though Caddy's own override was correct).
 };
 
 export default nextConfig;
