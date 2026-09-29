@@ -238,7 +238,7 @@ export default function Composer({
                     : "message velum…"
               }
               disabled={outOfCredits}
-              className="max-h-[200px] flex-1 resize-none bg-transparent py-2 font-chat text-[15px] leading-6 outline-none placeholder:text-faint disabled:opacity-50 focus-visible:shadow-none"
+              className="max-h-[200px] flex-1 resize-none bg-transparent py-2 font-chat text-[15px] leading-6 outline-none placeholder:text-faint disabled:opacity-50"
             />
 
             {sending ? (

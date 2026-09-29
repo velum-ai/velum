@@ -28,6 +28,7 @@ export default function ChatHeader({
   chatId,
   shared,
   onToggleShared,
+  minimal = false,
 }) {
   const options = models.length
     ? models
@@ -87,78 +88,84 @@ export default function ChatHeader({
         </button>
       )}
 
-      <button
-        onClick={onNewChat}
-        title="new chat"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:hidden"
-      >
-        <PlusIcon />
-      </button>
-
-      <ModelPicker models={options} value={model} onChange={onModelChange} />
+      {!minimal && <ModelPicker models={options} value={model} onChange={onModelChange} />}
 
       <div className="flex-1" />
 
-      <button
-        onClick={onToggleEphemeral}
-        title={ephemeral ? "temporary chat is on" : "start a temporary chat"}
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors ${
-          ephemeral
-            ? "border-border-strong bg-surface-2 text-foreground"
-            : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
-        }`}
-      >
-        <IncognitoIcon />
-      </button>
-
-      <div ref={shareRef} className="relative">
+      {!minimal && (
         <button
-          onClick={chatId ? handleShareClick : undefined}
-          disabled={!chatId}
-          title={
-            !chatId
-              ? "send a message first to share this chat"
-              : shared
-                ? "view or copy the share link"
-                : "share a read-only link to this chat"
-          }
-          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-            shared
-              ? "border-border-strong bg-surface-2 text-foreground"
-              : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
-          }`}
+          onClick={onNewChat}
+          title="new chat"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:hidden"
         >
-          <ShareIcon />
+          <PlusIcon />
         </button>
-        {chatId && linkOpen && shared && (
-          <div className="absolute right-0 top-9 z-20 w-72 rounded-lg border border-border bg-surface p-3 shadow-xl">
-            <p className="mb-2 text-xs text-muted">
-              anyone with this link can view this chat, read-only.
-            </p>
-            <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-                {shareUrl}
-              </span>
-              <button
-                onClick={copyLink}
-                title="copy link"
-                className="grid h-6 w-6 shrink-0 place-items-center rounded text-faint transition-colors hover:bg-surface hover:text-foreground"
-              >
-                {copied ? <CheckIcon /> : <CopyIcon />}
-              </button>
-            </div>
+      )}
+
+      {!minimal && (
+        <>
+          <button
+            onClick={onToggleEphemeral}
+            title={ephemeral ? "temporary chat is on" : "start a temporary chat"}
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors ${
+              ephemeral
+                ? "border-border-strong bg-surface-2 text-foreground"
+                : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
+            }`}
+          >
+            <IncognitoIcon />
+          </button>
+
+          <div ref={shareRef} className="relative">
             <button
-              onClick={() => {
-                onToggleShared();
-                setLinkOpen(false);
-              }}
-              className="mt-2 text-xs text-faint underline transition-colors hover:text-foreground"
+              onClick={chatId ? handleShareClick : undefined}
+              disabled={!chatId}
+              title={
+                !chatId
+                  ? "send a message first to share this chat"
+                  : shared
+                    ? "view or copy the share link"
+                    : "share a read-only link to this chat"
+              }
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                shared
+                  ? "border-border-strong bg-surface-2 text-foreground"
+                  : "border-transparent text-faint hover:bg-surface-2 hover:text-foreground"
+              }`}
             >
-              turn off sharing
+              <ShareIcon />
             </button>
+            {chatId && linkOpen && shared && (
+              <div className="absolute right-0 top-9 z-20 w-72 rounded-lg border border-border bg-surface p-3 shadow-xl">
+                <p className="mb-2 text-xs text-muted">
+                  anyone with this link can view this chat, read-only.
+                </p>
+                <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5">
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                    {shareUrl}
+                  </span>
+                  <button
+                    onClick={copyLink}
+                    title="copy link"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded text-faint transition-colors hover:bg-surface hover:text-foreground"
+                  >
+                    {copied ? <CheckIcon /> : <CopyIcon />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    onToggleShared();
+                    setLinkOpen(false);
+                  }}
+                  className="mt-2 text-xs text-faint underline transition-colors hover:text-foreground"
+                >
+                  turn off sharing
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <ThemeToggle />
     </header>

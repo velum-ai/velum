@@ -77,13 +77,39 @@ export async function findAccount(number) {
   return acc && { ...acc, systemPrompt: safeDecrypt(acc.systemPrompt) };
 }
 
+const PREVIEW_LEN = 120;
+
 export async function listChats(number) {
   const chats = await prisma.chat.findMany({
     where: { accountId: number },
     orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
-    select: { id: true, title: true, spent: true, pinned: true, projectId: true },
+    select: { id: true, title: true, spent: true, pinned: true, projectId: true, updatedAt: true },
   });
-  return chats.map(decChat);
+  if (chats.length === 0) return [];
+
+  // One groupBy for the latest message id per chat, then one batched fetch
+  // of just those rows, instead of a query per chat.
+  const latest = await prisma.message.groupBy({
+    by: ["chatId"],
+    where: { chatId: { in: chats.map((c) => c.id) } },
+    _max: { id: true },
+  });
+  const latestIds = latest.map((l) => l._max.id).filter((id) => id != null);
+  const lastMessages = latestIds.length
+    ? await prisma.message.findMany({
+        where: { id: { in: latestIds } },
+        select: { id: true, chatId: true, content: true },
+      })
+    : [];
+  const previewByChat = new Map(
+    lastMessages.map((m) => [m.chatId, safeDecrypt(m.content)]),
+  );
+
+  return chats.map((c) => {
+    const raw = previewByChat.get(c.id);
+    const preview = raw ? raw.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LEN) : null;
+    return { ...decChat(c), preview };
+  });
 }
 
 const MESSAGE_SELECT = {

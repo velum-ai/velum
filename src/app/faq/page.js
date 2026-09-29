@@ -7,11 +7,6 @@ export const metadata = {
 
 const questions = [
   {
-    question: "what is an account number?",
-    answer:
-      "a random 16-digit number. it is the only identity velum has for you, and the only way to sign in. we can't recover it, so keep it safe.",
-  },
-  {
     question: "is my chat data encrypted?",
     answer:
       "yes. message content, reasoning, chat titles, and custom instructions are encrypted at rest. a database leak or backup exposes ciphertext, not conversations.",
@@ -83,7 +78,8 @@ export default function FAQPage() {
           {questions.map((item) => (
             <div
               key={item.question}
-              className="flex flex-col gap-2 border-b border-border py-5 sm:py-6"
+              id={item.question.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}
+              className="flex scroll-mt-16 flex-col gap-2 border-b border-border py-5 sm:py-6"
             >
               <h2 className="text-base font-medium">{item.question}</h2>
               <p className="max-w-2xl leading-7 text-muted">{item.answer}</p>

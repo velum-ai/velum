@@ -6,30 +6,40 @@
 # places sends duplicate/conflicting header lines for the same name, and
 # browsers resolve conflicts unpredictably (X-Frame-Options especially, a
 # conflicting pair is treated as the more restrictive value).
+#
+# The attachments path needs a relaxed X-Frame-Options/frame-ancestors so
+# the chat UI's own <iframe> preview panel can load a generated file. Two
+# `header` directives (one global, one matcher-scoped) can race on
+# execution order, so this uses mutually-exclusive `handle` blocks instead,
+# Caddy's documented way to apply different config to different paths.
 
 your-domain.example {
 	encode gzip zstd
 
-	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Cross-Origin-Opener-Policy "same-origin"
-		# microphone=(self): the composer's dictation feature needs it.
-		Permissions-Policy "camera=(), microphone=(self), geolocation=(), browsing-topics=()"
+	handle /api/attachments/* {
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self';"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "SAMEORIGIN"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Cross-Origin-Opener-Policy "same-origin"
+			Permissions-Policy "camera=(), microphone=(self), geolocation=(), browsing-topics=()"
+		}
+		reverse_proxy localhost:8293
 	}
 
-	# Stored attachments (images, generated PDFs/docs) need to render in the
-	# chat UI's own <iframe> preview panel. Everything else stays DENY; this
-	# only relaxes framing for raw file bytes, on the same origin, nothing
-	# here executes as HTML/script.
-	@attachments path /api/attachments/*
-	header @attachments {
-		X-Frame-Options "SAMEORIGIN"
-		Content-Security-Policy "frame-ancestors 'self'"
+	handle {
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Cross-Origin-Opener-Policy "same-origin"
+			# microphone=(self): the composer's dictation feature needs it.
+			Permissions-Policy "camera=(), microphone=(self), geolocation=(), browsing-topics=()"
+		}
+		reverse_proxy localhost:8293
 	}
-
-	reverse_proxy localhost:8293
 }
