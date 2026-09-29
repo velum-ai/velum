@@ -199,60 +199,64 @@ export default function ProjectsView({
             </p>
           ) : (
             <div className="flex flex-col border-t border-border">
-              {projects.map((p) => {
-                const projectChats = chats.filter((c) => c.projectId === p.id);
-                const count = projectChats.length;
-                const lastActive = projectChats.reduce(
-                  (max, c) => (c.updatedAt && c.updatedAt > max ? c.updatedAt : max),
-                  "",
-                );
-                return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-1 border-b border-border transition-colors hover:bg-surface"
-                  >
-                    {renaming === p.id ? (
-                      <input
-                        autoFocus
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => submitRename(p.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") submitRename(p.id);
-                          if (e.key === "Escape") setRenaming(null);
-                        }}
-                        className="w-full bg-surface-2 px-3 py-3 text-sm outline-none"
-                      />
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => onOpenProject(p)}
-                          className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 text-left"
-                        >
-                          <span className="shrink-0 text-faint">
-                            <FolderIcon />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+              {projects
+                .map((p) => {
+                  const projectChats = chats.filter((c) => c.projectId === p.id);
+                  const lastActive = projectChats.reduce(
+                    (max, c) => (c.updatedAt && c.updatedAt > max ? c.updatedAt : max),
+                    "",
+                  );
+                  return { p, count: projectChats.length, lastActive };
+                })
+                .sort((a, b) => (a.lastActive < b.lastActive ? 1 : -1))
+                .map(({ p, count, lastActive }) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-1 border-b border-border transition-colors hover:bg-surface"
+                >
+                  {renaming === p.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => submitRename(p.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitRename(p.id);
+                        if (e.key === "Escape") setRenaming(null);
+                      }}
+                      className="w-full bg-surface-2 px-3 py-3 text-sm outline-none"
+                    />
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => onOpenProject(p)}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 text-left"
+                      >
+                        <span className="shrink-0 text-faint">
+                          <FolderIcon />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-foreground">
                             {p.name}
                           </span>
-                          <span className="shrink-0 text-xs tabular-nums text-faint">
+                          <span className="block text-xs text-faint">
                             {count} {count === 1 ? "chat" : "chats"}
                             {lastActive && ` · ${relativeTime(lastActive)}`}
                           </span>
-                        </button>
-                        <ProjectMenu
-                          project={p}
-                          onRename={(proj) => {
-                            setRenaming(proj.id);
-                            setRenameValue(proj.name);
-                          }}
-                          onDelete={onRemoveProject}
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                        </span>
+                      </button>
+                      <ProjectMenu
+                        project={p}
+                        onRename={(proj) => {
+                          setRenaming(proj.id);
+                          setRenameValue(proj.name);
+                        }}
+                        onDelete={onRemoveProject}
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

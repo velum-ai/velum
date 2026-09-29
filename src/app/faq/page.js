@@ -19,7 +19,7 @@ const questions = [
   {
     question: "what payment methods do you accept?",
     answer:
-      "card, apple pay, google pay, bank transfer, and more through dodo payments, or monero through a self-hosted btcpay server with no processor in the middle. no bank or card details reach us either way.",
+      "card, apple pay, google pay, bank transfer, and more through dodo payments. no bank or card details reach us either way. a monero option is coming back soon.",
   },
   {
     question: "which models can i use?",
