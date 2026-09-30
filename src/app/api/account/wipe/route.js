@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { wipeChats, deleteAccount } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
 import { maskAccount } from "@/lib/mask";
 import { log } from "@/lib/logger";
 
@@ -14,7 +14,7 @@ export async function POST(req) {
     windowMs: 60 * 60_000,
     account: body.account,
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   if (body.target === "account") {
     await deleteAccount(body.account);

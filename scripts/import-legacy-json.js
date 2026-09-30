@@ -4,6 +4,7 @@
 //   DATABASE_URL=postgres://... npm run import:legacy [path/to/db.json]
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
+import { encryptText } from "@/lib/crypto";
 
 const path = process.argv[2] || "data/db.json";
 const { accounts = {} } = JSON.parse(await readFile(path, "utf8"));
@@ -30,14 +31,17 @@ for (const [number, rec] of Object.entries(accounts)) {
         data: {
           id: chat.id,
           accountId: number,
-          title: chat.title || "chat",
+          // Chat.title and Message.content are always encrypted at rest
+          // (see src/lib/crypto.js) - match that here so imported chats
+          // read back correctly instead of decrypting to a placeholder.
+          title: encryptText(chat.title || "chat"),
           spent: Number(chat.spent) || 0,
           createdAt: ts,
           updatedAt: ts,
           messages: {
             create: (chat.messages || []).map((msg) => ({
               role: msg.role || "user",
-              content: String(msg.content ?? ""),
+              content: encryptText(String(msg.content ?? "")),
               createdAt: ts,
             })),
           },

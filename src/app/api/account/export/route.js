@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { exportAccount } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
+import { maskAccount } from "@/lib/mask";
+import { log } from "@/lib/logger";
 
 // One JSON file with the whole account: settings, every chat and message, and
 // paid top-ups. Served as an attachment.
@@ -13,10 +15,12 @@ export async function POST(req) {
     windowMs: 60 * 60_000,
     account,
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const dump = await exportAccount(account);
-  if (!dump) return NextResponse.json({ error: "invalid request" }, { status: 400 });
+  if (!dump) return bad("invalid request", 400);
+
+  log("account_exported", { account: maskAccount(account) });
 
   const last4 = String(account).replace(/\D/g, "").slice(-4);
   return new NextResponse(JSON.stringify(dump, null, 2), {

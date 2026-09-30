@@ -12,6 +12,13 @@ const MAX_BODY = 64 * 1024; // Dodo events are ~2KB; this is slack, not a limit
 // here. Answers 2xx only once the work is done or provably pointless to retry;
 // a transient failure returns 5xx so Dodo redelivers (it backs off for hours).
 export async function POST(req) {
+  // Reject on the declared length before buffering the body, not just after -
+  // an unauthenticated caller could otherwise force a large read every time.
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY) {
+    return NextResponse.json({ error: "payload too large" }, { status: 413 });
+  }
+
   const raw = await req.text();
   if (raw.length > MAX_BODY) {
     return NextResponse.json({ error: "payload too large" }, { status: 413 });
@@ -43,6 +50,11 @@ export async function POST(req) {
     if (event.type === "payment.succeeded" && ref) {
       const r = await creditPayment({ ref, dodoPaymentId: data.payment_id });
       log("payment_webhook", { ref, known: r.ok, credited: r.credited ?? false });
+      if (!r.ok) {
+        // Ref not found yet - the Payment row may not have landed before this
+        // fired. 5xx so Dodo redelivers instead of the credit being dropped.
+        return NextResponse.json({ error: "unknown payment, retry" }, { status: 503 });
+      }
     } else if (event.type === "payment.failed" && ref) {
       const { count } = await failPayment(ref);
       log("payment_webhook_failed", { ref, marked: count > 0 });

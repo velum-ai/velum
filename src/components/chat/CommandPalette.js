@@ -22,6 +22,7 @@ export default function CommandPalette({
   const [hits, setHits] = useState([]);
   const [active, setActive] = useState(0);
   const inputRef = useRef(null);
+  const searchReqRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -38,8 +39,11 @@ export default function CommandPalette({
     const term = q.trim();
     if (!open || term.length < 2 || !account) return;
     const t = setTimeout(async () => {
+      const myReq = ++searchReqRef.current;
       const { ok, data } = await api("/api/search", { body: { account, q: term } });
-      if (ok && Array.isArray(data.results)) setHits(data.results);
+      if (ok && Array.isArray(data.results) && searchReqRef.current === myReq) {
+        setHits(data.results);
+      }
     }, 200);
     return () => clearTimeout(t);
   }, [q, open, account]);

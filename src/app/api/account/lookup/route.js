@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listChats, listProjects, getChat } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
 import { decorateChatAttachments } from "@/lib/attachmentUrl";
 
 // One-shot bootstrap for the chat app: balance, the chat list, and - when a
@@ -16,7 +16,7 @@ export async function POST(req) {
     busy: "too many attempts, try again later",
     account,
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const [chats, projects, chat] = await Promise.all([
     listChats(account),

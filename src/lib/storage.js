@@ -79,10 +79,12 @@ const unlinkRows = async (rows) => {
 };
 
 // Remove the files behind a set of chats (call before the rows cascade away).
-export async function deleteAttachmentFilesForChats(chatIds) {
+// accountId, when given, scopes the lookup so a caller can't be tricked into
+// deleting another account's files by passing someone else's chat id.
+export async function deleteAttachmentFilesForChats(chatIds, accountId) {
   if (!chatIds.length) return;
   const rows = await prisma.attachment.findMany({
-    where: { chatId: { in: chatIds } },
+    where: { chatId: { in: chatIds }, ...(accountId && { accountId }) },
     select: { id: true, mime: true },
   });
   await unlinkRows(rows);

@@ -9,7 +9,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { encryptBuffer, decryptBuffer } from "../src/lib/crypto.js";
+import { encryptBuffer, decryptBuffer } from "@/lib/crypto";
+import { attachmentExt } from "@/lib/storage";
 
 const dbUrl = (() => {
   const base = process.env.DATABASE_URL || "";
@@ -29,17 +30,6 @@ const commit = process.argv.includes("--yes");
 const DATA_DIR = process.env.DATA_DIR || "./.data";
 const DIR = path.join(DATA_DIR, "attachments");
 
-const MIME_EXT = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "text/plain": "txt",
-  "text/markdown": "md",
-  "application/pdf": "pdf",
-};
-const extFor = (mime) => MIME_EXT[mime] || "bin";
-
 const isPlaintext = (buf) => {
   try {
     decryptBuffer(buf);
@@ -54,7 +44,7 @@ let plaintextCount = 0;
 let missing = 0;
 
 for (const row of rows) {
-  const file = path.join(DIR, `${row.id}.${extFor(row.mime)}`);
+  const file = path.join(DIR, `${row.id}.${attachmentExt(row.mime)}`);
   let buf;
   try {
     buf = await readFile(file);

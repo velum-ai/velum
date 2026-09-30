@@ -12,6 +12,13 @@ const MAX_BODY = 64 * 1024;
 // body for the HMAC, so never call req.json() here. A transient failure
 // returns 5xx so BTCPay redelivers.
 export async function POST(req) {
+  // Reject on the declared length before buffering the body, not just after -
+  // an unauthenticated caller could otherwise force a large read every time.
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY) {
+    return NextResponse.json({ error: "payload too large" }, { status: 413 });
+  }
+
   const raw = await req.text();
   if (raw.length > MAX_BODY) {
     return NextResponse.json({ error: "payload too large" }, { status: 413 });
@@ -34,7 +41,16 @@ export async function POST(req) {
 
   try {
     const row = await paymentRefForInvoice(invoiceId);
-    if (!row) return NextResponse.json({ ok: true }); // unknown invoice, nothing to do
+    if (!row) {
+      // For a settlement specifically, this could be the Payment row not
+      // having landed yet rather than a genuinely unknown invoice - 5xx so
+      // BTCPay redelivers instead of the credit being dropped. Any other
+      // event type on an unknown invoice really is nothing to do.
+      if (event.type === "InvoiceSettled") {
+        return NextResponse.json({ error: "unknown payment, retry" }, { status: 503 });
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     if (event.type === "InvoiceSettled") {
       const r = await creditPayment({ ref: row.id });

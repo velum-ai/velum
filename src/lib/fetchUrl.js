@@ -14,13 +14,22 @@ import { logError } from "@/lib/logger";
 const TIMEOUT_MS = 8_000;
 const MAX_CHARS = 20_000;
 const MAX_BYTES = 3 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
-function isPrivateIp(ip) {
-  if (ip === "127.0.0.1" || ip === "::1") return true;
+function isPrivateIp(rawIp) {
+  // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) must be judged by its IPv4 part.
+  const mapped = rawIp.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  const ip = mapped ? mapped[1] : rawIp;
+
+  if (ip === "::1") return true;
+  if (/^0\./.test(ip)) return true; // "this" network
   if (/^10\./.test(ip)) return true;
-  if (/^192\.168\./.test(ip)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip)) return true; // carrier-grade NAT
+  if (/^127\./.test(ip)) return true; // full loopback block
   if (/^169\.254\./.test(ip)) return true; // link-local, includes cloud metadata IPs
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  if (/^192\.0\.0\./.test(ip)) return true; // IETF protocol assignments
+  if (/^192\.168\./.test(ip)) return true;
   if (/^f[cd][0-9a-f]{0,2}:/i.test(ip)) return true; // IPv6 unique local
   if (/^fe80:/i.test(ip)) return true; // IPv6 link-local
   return false;
@@ -73,27 +82,50 @@ export async function fetchUrl(rawUrl) {
     return `error: ${err.message}`;
   }
 
+  // redirect: "manual" so a redirect target is re-validated by assertSafeUrl
+  // before it's ever followed - otherwise a remote page can 302 straight
+  // past the private-IP check into internal network space.
   const call = () =>
     fetch(url, {
       headers: { "user-agent": "Mozilla/5.0 (compatible; velum/1.0)" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      redirect: "manual",
     });
 
   let res;
-  try {
-    res = await call();
-  } catch (err) {
-    if (!isTransient(err)) {
-      logError("fetch_url_failed", err, { url: rawUrl });
-      return "error: could not reach that url";
-    }
-    await wait(300);
+  for (let hop = 0; ; hop++) {
     try {
       res = await call();
-    } catch (err2) {
-      logError("fetch_url_failed", err2, { url: rawUrl });
-      return "error: could not reach that url";
+    } catch (err) {
+      if (!isTransient(err)) {
+        logError("fetch_url_failed", err, { url: rawUrl });
+        return "error: could not reach that url";
+      }
+      await wait(300);
+      try {
+        res = await call();
+      } catch (err2) {
+        logError("fetch_url_failed", err2, { url: rawUrl });
+        return "error: could not reach that url";
+      }
     }
+
+    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+      if (hop >= MAX_REDIRECTS) return "error: too many redirects";
+      let nextHref;
+      try {
+        nextHref = new URL(res.headers.get("location"), url).href;
+      } catch {
+        return "error: page redirected somewhere invalid";
+      }
+      try {
+        url = await assertSafeUrl(nextHref);
+      } catch (err) {
+        return `error: ${err.message}`;
+      }
+      continue;
+    }
+    break;
   }
 
   if (!res.ok) return `error: page returned ${res.status}`;

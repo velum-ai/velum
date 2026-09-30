@@ -4,10 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useSignedIn } from "@/lib/useSignedIn";
 
 export default function Header() {
   const pathname = usePathname();
-  const showLogin = pathname !== "/login" && pathname !== "/create-account";
+  const signedIn = useSignedIn();
+  const showLogin =
+    !signedIn && pathname !== "/login" && pathname !== "/create-account";
 
   return (
     <header className="border-b border-border">
