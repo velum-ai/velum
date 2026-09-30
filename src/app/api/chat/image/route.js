@@ -7,10 +7,22 @@ import { imageCredits } from "@/lib/pricing";
 import { saveAttachment } from "@/lib/storage";
 import { signId } from "@/lib/sign";
 import { logError } from "@/lib/logger";
+import { MAX_IMAGES, MAX_DATA_URL_LENGTH, IMAGE_DATA_URL } from "@/lib/limits";
 
 export const dynamic = "force-dynamic";
 
 const PROMPT_MAX = 4000;
+
+const validImages = (images) =>
+  images === undefined ||
+  (Array.isArray(images) &&
+    images.length <= MAX_IMAGES &&
+    images.every(
+      (url) =>
+        typeof url === "string" &&
+        url.length <= MAX_DATA_URL_LENGTH &&
+        IMAGE_DATA_URL.test(url),
+    ));
 
 // Image generation. Not streamed - a single JSON response after the image is
 // ready. Billed at a flat per-image rate (see pricing.imageCredits).
@@ -19,7 +31,7 @@ export async function POST(req) {
 
   const body = await req.json().catch(() => null);
   if (!body) return bad("invalid request", 400);
-  const { account, chatId, prompt, ephemeral } = body;
+  const { account, chatId, prompt, images, ephemeral } = body;
 
   const g = await guardRequest(req, {
     key: "image",
@@ -37,6 +49,7 @@ export async function POST(req) {
 
   const text = typeof prompt === "string" ? prompt.trim().slice(0, PROMPT_MAX) : "";
   if (!text) return bad("invalid account", 400);
+  if (!validImages(images)) return bad("invalid images", 400);
 
   const cost = imageCredits();
   const r = await reserveCredits(account, cost);
@@ -44,7 +57,7 @@ export async function POST(req) {
 
   let image;
   try {
-    image = await generateImage({ prompt: text, signal: req.signal });
+    image = await generateImage({ prompt: text, images, signal: req.signal });
   } catch (err) {
     logError("image_generation_failed", err, {});
     await settleCredits(r.reservationId, 0);

@@ -168,11 +168,15 @@ const GENERATE_IMAGE_TOOL = {
   type: "function",
   function: {
     name: "generate_image",
-    description: "Generate an image from a text description and hand it back to the user.",
+    description:
+      "Generate an image from a text description and hand it back to the user. If the user attached an image to this message and is asking for changes to it (\"remove the background\", \"make this darker\", \"add a hat\"), call this with a prompt describing the edit - the attached image is passed through automatically and gets edited in place, no need to re-describe it from scratch.",
     parameters: {
       type: "object",
       properties: {
-        prompt: { type: "string", description: "What the image should show." },
+        prompt: {
+          type: "string",
+          description: "What the image should show, or the edit to make to the attached one.",
+        },
       },
       required: ["prompt"],
     },
@@ -184,7 +188,7 @@ const GENERATE_IMAGE_TOOL = {
 // tool_call_id gets a valid tool response and the follow-up request is
 // never malformed. `file` is set by run_python's output_file or by
 // generate_image, never by web_search/fetch_url.
-async function runTool(name, argsJson) {
+async function runTool(name, argsJson, images) {
   let args = {};
   try {
     args = JSON.parse(argsJson || "{}");
@@ -204,10 +208,10 @@ async function runTool(name, argsJson) {
   if (name === "generate_image") {
     if (!args.prompt) return { text: "error: no prompt given", file: null };
     try {
-      const img = await generateImage({ prompt: args.prompt });
+      const img = await generateImage({ prompt: args.prompt, images });
       const ext = img.mime.split("/")[1] || "png";
       return {
-        text: "generated the image",
+        text: images?.length ? "edited the image" : "generated the image",
         file: { buffer: img.buffer, mime: img.mime, name: `image.${ext}` },
       };
     } catch (err) {
@@ -231,7 +235,15 @@ async function runTool(name, argsJson) {
 // takes over once round 1 is already streaming.
 const MAX_TOOL_ROUNDS = 3;
 
-async function* toolLoopEvents({ firstEvents, model, messages, tools, maxOutput, signal }) {
+async function* toolLoopEvents({
+  firstEvents,
+  model,
+  messages,
+  tools,
+  maxOutput,
+  signal,
+  images,
+}) {
   let events = firstEvents;
   let history = messages;
   let totalPromptTokens = 0;
@@ -292,7 +304,7 @@ async function* toolLoopEvents({ firstEvents, model, messages, tools, maxOutput,
     const results = await Promise.all(
       uniqueToolCalls.map(async (tc) => ({
         tc,
-        result: await runTool(tc.name, tc.arguments),
+        result: await runTool(tc.name, tc.arguments, images),
       })),
     );
 
@@ -564,6 +576,7 @@ export async function POST(req) {
           tools,
           maxOutput,
           signal: req.signal,
+          images,
         })
       : chatEvents(upstream.body),
     appendUser,
