@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAccount, updateSystemPrompt, updateEnabledModels } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
 import { maskAccount } from "@/lib/mask";
 import { log } from "@/lib/logger";
@@ -15,17 +15,14 @@ export async function POST(req) {
     windowMs: 60 * 60_000, // 5 / hour / ip
     busy: "too many accounts created, try again later",
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const daily = await checkRateLimit(`create-account-day:${clientIp(req)}`, {
     limit: 20,
     windowMs: 24 * 60 * 60_000, // 20 / day / ip
   });
   if (!daily.allowed) {
-    return NextResponse.json(
-      { error: "too many accounts created, try again later" },
-      { status: 429 },
-    );
+    return bad("too many accounts created, try again later", 429);
   }
 
   const body = await req.json().catch(() => ({}));
@@ -43,13 +40,11 @@ export async function PATCH(req) {
     windowMs: 60_000,
     account: body.account,
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const result = Array.isArray(body.enabledModels)
     ? await updateEnabledModels(body.account, body.enabledModels)
     : await updateSystemPrompt(body.account, body.systemPrompt);
 
-  return result
-    ? NextResponse.json(result)
-    : NextResponse.json({ error: "invalid request" }, { status: 400 });
+  return result ? NextResponse.json(result) : bad("invalid request", 400);
 }

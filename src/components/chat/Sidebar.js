@@ -72,7 +72,30 @@ export default function Sidebar({
   const [moveChat, setMoveChat] = useState(null);
   const [draggingChatId, setDraggingChatId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [resizing, setResizing] = useState(false);
   const menuButtonRefs = useRef({});
+  const resizeStart = useRef({ x: 0, width: 0 });
+
+  // Effect-managed so the listeners always come off when resizing stops -
+  // including a mouseup outside the window - instead of only when a mouseup
+  // happens to land inside it.
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (ev) => {
+      const next = Math.min(
+        420,
+        Math.max(200, resizeStart.current.width + (ev.clientX - resizeStart.current.x)),
+      );
+      onResize?.(next);
+    };
+    const onUp = () => setResizing(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizing, onResize]);
 
   const dragProps = (chat) => ({
     draggable: true,
@@ -350,18 +373,8 @@ export default function Sidebar({
 
   const startResize = (e) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = width;
-    const onMove = (ev) => {
-      const next = Math.min(420, Math.max(200, startWidth + (ev.clientX - startX)));
-      onResize?.(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    resizeStart.current = { x: e.clientX, width };
+    setResizing(true);
   };
 
   return (

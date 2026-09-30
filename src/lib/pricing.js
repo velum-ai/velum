@@ -143,8 +143,6 @@ export function isAllowedModel(model) {
   return Object.hasOwn(MODELS, model);
 }
 
-export const modelTier = (model) => MODELS[model]?.tier || "efficient";
-
 // The starting pick set for an account that hasn't customized its model list.
 export const defaultModelIds = () =>
   Object.keys(MODELS).filter((id) => MODELS[id].default);
@@ -193,8 +191,12 @@ export const isValidPurchase = (credits) =>
   credits <= MAX_PURCHASE_CREDITS &&
   credits % 100 === 0;
 
+// Rough chars-per-token heuristic, shared with estimate.js's client-side
+// reservation preview so both sides of a request agree on the same number.
+export const CHARS_PER_TOKEN = 4;
+
 export function estimateInputTokens(text) {
-  return Math.ceil((text?.length || 0) / 4);
+  return Math.ceil((text?.length || 0) / CHARS_PER_TOKEN);
 }
 
 // Credits charged per 1M tokens at a given USD/1M rate, margin applied.

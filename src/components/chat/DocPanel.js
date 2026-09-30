@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CloseIcon,
@@ -27,26 +27,36 @@ export default function DocPanel({ doc, onClose }) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [fullscreen, setFullscreen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, width: DEFAULT_WIDTH });
+
+  // Effect-managed (not a plain mouseup handler) so the listeners are always
+  // torn down when dragging stops - including a mouseup that lands outside
+  // the window, or the panel closing mid-drag - never left dangling on window.
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (ev) => {
+      // panel sits on the right, dragging left widens it
+      const next = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, dragStart.current.width - (ev.clientX - dragStart.current.x)),
+      );
+      setWidth(next);
+    };
+    const onUp = () => setDragging(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
 
   if (!doc) return null;
 
   const startResize = (e) => {
     e.preventDefault();
+    dragStart.current = { x: e.clientX, width };
     setDragging(true);
-    const startX = e.clientX;
-    const startWidth = width;
-    const onMove = (ev) => {
-      // panel sits on the right, dragging left widens it
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth - (ev.clientX - startX)));
-      setWidth(next);
-    };
-    const onUp = () => {
-      setDragging(false);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
   };
 
   const body = (

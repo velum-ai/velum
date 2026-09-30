@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { accountNumberAvailable } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
 
 // Read-only availability check for a client-generated candidate account
 // number, called before it's shown to the user. Nothing is written here -
@@ -16,7 +16,7 @@ export async function POST(req) {
     windowMs: 5 * 60_000,
     busy: "too many attempts, try again later",
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const available = await accountNumberAvailable(body.number);
   return NextResponse.json({ available });

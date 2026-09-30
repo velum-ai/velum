@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FullScreenNotice from "@/components/FullScreenNotice";
+import RedirectIfSignedIn from "@/components/RedirectIfSignedIn";
 import { api } from "@/lib/clientApi";
 import { STORAGE_KEY } from "@/lib/limits";
 
@@ -128,6 +129,7 @@ export default function CreateAccountPage() {
   if (phase === "error") {
     return (
       <>
+        <RedirectIfSignedIn />
         <Header />
         <FullScreenNotice
           title={rateLimited ? "you're being rate limited" : "something went wrong"}
@@ -142,6 +144,7 @@ export default function CreateAccountPage() {
 
   return (
     <>
+      <RedirectIfSignedIn />
       <Header />
 
       <main className="mx-auto flex w-full max-w-lg flex-1 items-center px-4 py-10 sm:px-6 sm:py-16">

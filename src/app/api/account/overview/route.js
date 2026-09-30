@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { accountOverview } from "@/lib/account";
-import { guardRequest } from "@/lib/guard";
+import { guardRequest, bad } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +12,8 @@ export async function POST(req) {
     windowMs: 60_000,
     account,
   });
-  if (g.error) return NextResponse.json({ error: g.error }, { status: g.status });
+  if (g.error) return bad(g.error, g.status);
 
   const data = await accountOverview(account, g.record);
-  return data
-    ? NextResponse.json(data)
-    : NextResponse.json({ error: "invalid account" }, { status: 400 });
+  return data ? NextResponse.json(data) : bad("invalid account", 400);
 }

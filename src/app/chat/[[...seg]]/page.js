@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/clientApi";
 import { parseSSE } from "@/lib/sse";
@@ -72,7 +72,8 @@ const IMAGE_INTENT =
   /^\s*(?:generate|create|draw|paint|render|design|make me|give me)\b[^.?!]*\b(?:image|picture|photo(?:graph)?|illustration|logo|icon|artwork|drawing|painting|poster|wallpaper|sketch|render)\b/i;
 
 // signals the user wants text output, not a generated image
-const NOT_IMAGE = /\b(ascii|in text|as text|markdown|code|table|diagram|list)\b/i;
+const NOT_IMAGE =
+  /\b(ascii|in text|as text|markdown|code|table|diagram|list)\b/i;
 
 function detectImagePrompt(text) {
   const m = /^\s*\/(?:image|img)\s+([\s\S]+)/i.exec(text);
@@ -148,6 +149,10 @@ export default function ChatPage() {
   // a chat the user has since left can tell it's stale and stop touching
   // the now-unrelated visible messages/doc panel/URL.
   const streamTokenRef = useRef(0);
+  // Holds the always-current keydown handler so the window listener itself
+  // only needs to be registered once (see the "global shortcuts" effect
+  // below) instead of tearing down/re-adding on every render.
+  const onKeyRef = useRef(null);
 
   const focusComposer = () =>
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -294,7 +299,10 @@ export default function ChatPage() {
   // persist the composer draft per thread so it survives navigation
   useEffect(() => {
     if (!draftKey) return;
-    const t = setTimeout(() => writeLS(draftKey, input.trim() ? input : ""), 300);
+    const t = setTimeout(
+      () => writeLS(draftKey, input.trim() ? input : ""),
+      300,
+    );
     return () => clearTimeout(t);
   }, [input, draftKey]);
 
@@ -305,7 +313,10 @@ export default function ChatPage() {
 
   // persist sidebar width, debounced so a drag doesn't spam localStorage
   useEffect(() => {
-    const t = setTimeout(() => writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)), 300);
+    const t = setTimeout(
+      () => writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)),
+      300,
+    );
     return () => clearTimeout(t);
   }, [sidebarWidth]);
 
@@ -394,10 +405,12 @@ export default function ChatPage() {
       if (!id) return startNewChat({ push: false });
       const known = chats.find((c) => c.id === id);
       if (known) return selectChat(known, { push: false });
-      api("/api/chats", { body: { account, chatId: id } }).then(({ ok, data }) => {
-        if (ok && data.id) selectChat(data, { push: false });
-        else startNewChat({ push: false });
-      });
+      api("/api/chats", { body: { account, chatId: id } }).then(
+        ({ ok, data }) => {
+          if (ok && data.id) selectChat(data, { push: false });
+          else startNewChat({ push: false });
+        },
+      );
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -428,7 +441,10 @@ export default function ChatPage() {
     let base =
       replaceFromIndex != null ? messages.slice(0, replaceFromIndex) : messages;
     if (appendUser) {
-      base = [...base, { role: "user", content: text, ...(imgs.length && { images: imgs }) }];
+      base = [
+        ...base,
+        { role: "user", content: text, ...(imgs.length && { images: imgs }) },
+      ];
     }
     const startedAt = Date.now();
     const retry = { text, imgs, docs, appendUser };
@@ -446,7 +462,9 @@ export default function ChatPage() {
     abortRef.current = controller;
 
     const anchorId =
-      replaceFromIndex != null ? messages[replaceFromIndex - 1]?.id ?? 0 : null;
+      replaceFromIndex != null
+        ? (messages[replaceFromIndex - 1]?.id ?? 0)
+        : null;
 
     let acc = "";
     let reason = "";
@@ -459,7 +477,13 @@ export default function ChatPage() {
       if (!isCurrent()) return;
       setMessages([
         ...base,
-        { role: "assistant", content: acc, reasoning: reason, activity: [...activity], startedAt },
+        {
+          role: "assistant",
+          content: acc,
+          reasoning: reason,
+          activity: [...activity],
+          startedAt,
+        },
       ]);
     };
     // Throttled well below the display's refresh rate on purpose: markdown
@@ -496,7 +520,8 @@ export default function ChatPage() {
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
-        if (res.status === 402 && typeof data.credits === "number") setCredits(data.credits);
+        if (res.status === 402 && typeof data.credits === "number")
+          setCredits(data.credits);
         if (isCurrent()) {
           setMessages([
             ...base,
@@ -551,9 +576,16 @@ export default function ChatPage() {
       if (isCurrent()) {
         setDocPanel((prev) => {
           if (!prev) return prev;
-          const doc = final?.attachments?.find((a) => !a.mime?.startsWith("image/"));
+          const doc = final?.attachments?.find(
+            (a) => !a.mime?.startsWith("image/"),
+          );
           return doc
-            ? { status: "ready", name: doc.name || prev.name, url: doc.url, mime: doc.mime }
+            ? {
+                status: "ready",
+                name: doc.name || prev.name,
+                url: doc.url,
+                mime: doc.mime,
+              }
             : null;
         });
       }
@@ -565,7 +597,9 @@ export default function ChatPage() {
           content: replyContent,
           reasoning: reason || null,
           activity: activity.length ? activity : null,
-          attachments: final.attachments?.length ? final.attachments : undefined,
+          attachments: final.attachments?.length
+            ? final.attachments
+            : undefined,
           cost: final.cost,
           model,
           id: final.messageId,
@@ -593,7 +627,9 @@ export default function ChatPage() {
               messages: finalMessages,
               spent: final.spent ?? 0,
               pinned: prev.find((c) => c.id === final.chatId)?.pinned ?? false,
-              ...(isNewChat && targetProjectId ? { projectId: targetProjectId } : {}),
+              ...(isNewChat && targetProjectId
+                ? { projectId: targetProjectId }
+                : {}),
             },
             ...prev.filter((c) => c.id !== final.chatId),
           ]),
@@ -621,14 +657,24 @@ export default function ChatPage() {
         if (isCurrent()) {
           setMessages([
             ...base,
-            { role: "assistant", content: acc, reasoning: reason || null, startedAt },
+            {
+              role: "assistant",
+              content: acc,
+              reasoning: reason || null,
+              startedAt,
+            },
           ]);
         }
         if (account) loadAccount(account);
       } else if (isCurrent()) {
         setMessages([
           ...base,
-          { role: "assistant", content: "something went wrong", error: true, retry },
+          {
+            role: "assistant",
+            content: "something went wrong",
+            error: true,
+            retry,
+          },
         ]);
       }
     } finally {
@@ -648,7 +694,10 @@ export default function ChatPage() {
       replaceFromIndex != null ? messages.slice(0, replaceFromIndex) : messages;
     const base = [...prior, { role: "user", content: prompt }];
     const retry = { imagePrompt: prompt };
-    setMessages([...base, { role: "assistant", content: "", generating: true }]);
+    setMessages([
+      ...base,
+      { role: "assistant", content: "", generating: true },
+    ]);
     setInput("");
     if (draftKey) writeLS(draftKey, "");
     setSending(true);
@@ -666,7 +715,8 @@ export default function ChatPage() {
         },
       });
       if (!ok) {
-        if (status === 402 && typeof data.credits === "number") setCredits(data.credits);
+        if (status === 402 && typeof data.credits === "number")
+          setCredits(data.credits);
         if (isCurrent()) {
           setMessages([
             ...base,
@@ -717,7 +767,12 @@ export default function ChatPage() {
       if (err?.name !== "AbortError" && isCurrent()) {
         setMessages([
           ...base,
-          { role: "assistant", content: "something went wrong", error: true, retry },
+          {
+            role: "assistant",
+            content: "something went wrong",
+            error: true,
+            retry,
+          },
         ]);
       }
     } finally {
@@ -743,7 +798,9 @@ export default function ChatPage() {
       return;
     }
     const imgPrompt =
-      images.length === 0 && files.length === 0 ? detectImagePrompt(text) : null;
+      images.length === 0 && files.length === 0
+        ? detectImagePrompt(text)
+        : null;
     if (imgPrompt) {
       generateImage(imgPrompt);
       return;
@@ -786,15 +843,23 @@ export default function ChatPage() {
     const title = editTitle.trim();
     setEditingChatId(null);
     if (!title) return;
-    setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, title } : c)));
-    await api("/api/chats", { method: "PATCH", body: { account, chatId, title } });
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, title } : c)),
+    );
+    await api("/api/chats", {
+      method: "PATCH",
+      body: { account, chatId, title },
+    });
   };
 
   const togglePin = async (chatId, pinned) => {
     setChats((prev) =>
       sortChats(prev.map((c) => (c.id === chatId ? { ...c, pinned } : c))),
     );
-    await api("/api/chats", { method: "PATCH", body: { account, chatId, pinned } });
+    await api("/api/chats", {
+      method: "PATCH",
+      body: { account, chatId, pinned },
+    });
   };
 
   const toggleShared = async () => {
@@ -838,9 +903,14 @@ export default function ChatPage() {
   const removeProject = async (projectId) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
     setChats((prev) =>
-      prev.map((c) => (c.projectId === projectId ? { ...c, projectId: null } : c)),
+      prev.map((c) =>
+        c.projectId === projectId ? { ...c, projectId: null } : c,
+      ),
     );
-    await api("/api/projects", { method: "DELETE", body: { account, projectId } });
+    await api("/api/projects", {
+      method: "DELETE",
+      body: { account, projectId },
+    });
   };
 
   const moveChatToProject = async (chatId, projectId) => {
@@ -865,57 +935,72 @@ export default function ChatPage() {
     focusComposer();
   };
 
-  // global shortcuts
+  // global shortcuts. The handler closure is rebuilt every render (cheap) and
+  // stashed in onKeyRef via the no-deps effect below; the actual window
+  // listener is registered once, separately, and just dispatches to whatever
+  // the ref currently holds - so typing and streaming don't churn a real
+  // subscribe/unsubscribe on every keystroke.
+  const handleGlobalKey = (e) => {
+    const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      setSearchScope(null);
+      setPaletteOpen((v) => !v);
+      return;
+    }
+    if (e.key === "Escape") {
+      if (sending) stopGeneration();
+      else setShortcutsOpen(false);
+      return;
+    }
+    if (typing) return;
+    const mod = e.metaKey || e.ctrlKey;
+    const k = e.key.toLowerCase();
+    if (mod && e.shiftKey && k === "o") {
+      e.preventDefault();
+      startNewChat();
+    } else if (mod && k === "b") {
+      e.preventDefault();
+      setSidebarOpen((v) => !v);
+    } else if (mod && e.shiftKey && k === ".") {
+      e.preventDefault();
+      toggleEphemeral();
+    } else if (mod && e.shiftKey && k === "c") {
+      e.preventDefault();
+      const last = [...messages].reverse().find((m) => m.role === "assistant");
+      if (last?.content)
+        navigator.clipboard?.writeText(last.content).catch(() => {});
+    } else if (!mod && k === "/") {
+      e.preventDefault();
+      inputRef.current?.focus();
+    } else if (!mod && e.key === "?") {
+      e.preventDefault();
+      setShortcutsOpen(true);
+    }
+  };
+
   useEffect(() => {
-    const onKey = (e) => {
-      const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setSearchScope(null);
-        setPaletteOpen((v) => !v);
-        return;
-      }
-      if (e.key === "Escape") {
-        if (sending) stopGeneration();
-        else setShortcutsOpen(false);
-        return;
-      }
-      if (typing) return;
-      const mod = e.metaKey || e.ctrlKey;
-      const k = e.key.toLowerCase();
-      if (mod && e.shiftKey && k === "o") {
-        e.preventDefault();
-        startNewChat();
-      } else if (mod && k === "b") {
-        e.preventDefault();
-        setSidebarOpen((v) => !v);
-      } else if (mod && e.shiftKey && k === ".") {
-        e.preventDefault();
-        toggleEphemeral();
-      } else if (mod && e.shiftKey && k === "c") {
-        e.preventDefault();
-        const last = [...messages].reverse().find((m) => m.role === "assistant");
-        if (last?.content) navigator.clipboard?.writeText(last.content).catch(() => {});
-      } else if (!mod && k === "/") {
-        e.preventDefault();
-        inputRef.current?.focus();
-      } else if (!mod && e.key === "?") {
-        e.preventDefault();
-        setShortcutsOpen(true);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    onKeyRef.current = handleGlobalKey;
   });
 
+  useEffect(() => {
+    const onKey = (e) => onKeyRef.current?.(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const modelRow = models.find((m) => m.id === model);
-  const historyChars = Math.min(
-    HISTORY_CHAR_CAP,
-    messages.reduce((n, m) => n + (m.content?.length || 0), 0),
+  const historyChars = useMemo(
+    () =>
+      Math.min(
+        HISTORY_CHAR_CAP,
+        messages.reduce((n, m) => n + (m.content?.length || 0), 0),
+      ),
+    [messages],
   );
   const holdEstimate =
     mode === "image"
-      ? imageInfo?.credits ?? null
+      ? (imageInfo?.credits ?? null)
       : input.trim()
         ? reserveEstimate({
             model: modelRow,
@@ -1040,7 +1125,9 @@ export default function ChatPage() {
               fileAccept={[...IMAGE_TYPES, ...FILE_TYPES].join(",")}
               inputRef={inputRef}
               mode={mode}
-              onToggleMode={() => setMode((m) => (m === "image" ? "chat" : "image"))}
+              onToggleMode={() =>
+                setMode((m) => (m === "image" ? "chat" : "image"))
+              }
               imageEnabled={Boolean(imageInfo)}
               holdEstimate={holdEstimate}
             />

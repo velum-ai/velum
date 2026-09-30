@@ -6,7 +6,7 @@
 //   npm run db:encrypt-existing            # show what would change
 //   npm run db:encrypt-existing -- --yes   # encrypt it
 import { PrismaClient } from "@prisma/client";
-import { encryptText, decryptText } from "../src/lib/crypto.js";
+import { encryptText, decryptText } from "@/lib/crypto";
 
 const dbUrl = (() => {
   const base = process.env.DATABASE_URL || "";

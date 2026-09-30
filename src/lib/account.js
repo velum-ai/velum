@@ -146,6 +146,11 @@ const MESSAGE_SELECT = {
   },
 };
 
+// Same shape, minus reasoning: the public share page never renders a
+// message's chain-of-thought, only its final content, so the public API
+// shouldn't hand it out either.
+const { reasoning: _omitReasoning, ...PUBLIC_MESSAGE_SELECT } = MESSAGE_SELECT;
+
 // Full thread, scoped to the owning account. Unknown chat -> null.
 export async function getChat(number, chatId) {
   const chat = await prisma.chat.findFirst({
@@ -171,7 +176,7 @@ export async function getSharedChat(chatId) {
     select: {
       id: true,
       title: true,
-      messages: { orderBy: { id: "asc" }, select: MESSAGE_SELECT },
+      messages: { orderBy: { id: "asc" }, select: PUBLIC_MESSAGE_SELECT },
     },
   });
   return chat && { ...decChat(chat), messages: chat.messages.map(decMessage) };
@@ -404,7 +409,9 @@ export async function setChatShared(number, chatId, shared) {
 }
 
 export async function deleteChat(number, chatId) {
-  await deleteAttachmentFilesForChats([chatId]);
+  // Files must never be deleted for a chat that turns out not to be the
+  // caller's - accountId scopes both the lookup and the delete below.
+  await deleteAttachmentFilesForChats([chatId], number);
   const { count } = await prisma.chat.deleteMany({
     where: { id: chatId, accountId: number },
   });
