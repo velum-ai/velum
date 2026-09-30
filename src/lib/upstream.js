@@ -118,15 +118,25 @@ export function chatEvents(body) {
 
 // --- image --------------------------------------------------------------
 
-// One generated image via OpenRouter: /chat/completions with an image
-// modality. The picture comes back as a data URL on the assistant message.
-export async function generateImage({ prompt, signal }) {
+// One generated (or edited, when `images` is given) image via OpenRouter:
+// /chat/completions with an image modality. IMAGE_MODEL is natively
+// multimodal in both directions, so handing it existing images alongside the
+// prompt edits them instead of generating from scratch. The picture comes
+// back as a data URL on the assistant message.
+export async function generateImage({ prompt, images, signal }) {
+  const content = images?.length
+    ? [
+        { type: "text", text: prompt },
+        ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+      ]
+    : prompt;
+
   const res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: headers(),
     body: JSON.stringify({
       model: IMAGE_MODEL,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
       modalities: ["image", "text"],
     }),
     signal: withTimeout(signal, IMAGE_TIMEOUT_MS),

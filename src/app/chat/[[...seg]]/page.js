@@ -686,20 +686,24 @@ export default function ChatPage() {
     }
   };
 
-  const generateImage = async (prompt, replaceFromIndex = null) => {
+  const generateImage = async (prompt, replaceFromIndex = null, imgs = []) => {
     if (!account || sending || outOfCredits || !prompt.trim()) return;
     const myToken = ++streamTokenRef.current;
     const isCurrent = () => streamTokenRef.current === myToken;
     const prior =
       replaceFromIndex != null ? messages.slice(0, replaceFromIndex) : messages;
-    const base = [...prior, { role: "user", content: prompt }];
-    const retry = { imagePrompt: prompt };
+    const base = [
+      ...prior,
+      { role: "user", content: prompt, ...(imgs.length && { images: imgs }) },
+    ];
+    const retry = { imagePrompt: prompt, imgs };
     setMessages([
       ...base,
       { role: "assistant", content: "", generating: true },
     ]);
     setInput("");
     if (draftKey) writeLS(draftKey, "");
+    setImages([]);
     setSending(true);
 
     const controller = new AbortController();
@@ -711,6 +715,7 @@ export default function ChatPage() {
           account,
           chatId: ephemeral ? null : activeChatId,
           prompt,
+          ...(imgs.length && { images: imgs }),
           ...(ephemeral && { ephemeral: true }),
         },
       });
@@ -787,7 +792,7 @@ export default function ChatPage() {
   const onSend = () => {
     const text = input.trim();
     if (mode === "image") {
-      if (text) generateImage(text);
+      if (text) generateImage(text, null, images);
       return;
     }
     if (
@@ -812,7 +817,7 @@ export default function ChatPage() {
     const r = messages[index]?.retry;
     if (!r) return;
     if (r.imagePrompt) {
-      generateImage(r.imagePrompt, index - 1);
+      generateImage(r.imagePrompt, index - 1, r.imgs || []);
       return;
     }
     const cut = r.appendUser ? index - 1 : index;
@@ -1122,7 +1127,7 @@ export default function ChatPage() {
               onSend={onSend}
               fileInputRef={fileInputRef}
               onFilesSelected={handleFiles}
-              fileAccept={[...IMAGE_TYPES, ...FILE_TYPES].join(",")}
+              fileAccept={(mode === "image" ? IMAGE_TYPES : [...IMAGE_TYPES, ...FILE_TYPES]).join(",")}
               inputRef={inputRef}
               mode={mode}
               onToggleMode={() =>

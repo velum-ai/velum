@@ -43,7 +43,7 @@ export default function Composer({
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
 
-  const canDrop = !isImage && !outOfCredits && !sending;
+  const canDrop = !outOfCredits && !sending;
 
   const onDragEnter = (e) => {
     if (!canDrop || !e.dataTransfer.types.includes("Files")) return;
@@ -127,7 +127,7 @@ export default function Composer({
         )}
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
-          {!isImage && (images.length > 0 || files.length > 0) && (
+          {(images.length > 0 || (!isImage && files.length > 0)) && (
             <div className="flex flex-wrap gap-2 px-1 pt-1">
               {images.map((img, i) => (
                 <div key={`img-${i}`} className="relative">
@@ -146,7 +146,7 @@ export default function Composer({
                   </button>
                 </div>
               ))}
-              {files.map((f, i) => (
+              {!isImage && files.map((f, i) => (
                 <div
                   key={`file-${i}`}
                   className="flex h-16 max-w-[10rem] items-center gap-1.5 rounded-md border border-border px-2.5"
@@ -185,16 +185,14 @@ export default function Composer({
               </button>
             )}
 
-            {!isImage && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending || outOfCredits}
-                title="attach image or text file"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
-              >
-                <PaperclipIcon />
-              </button>
-            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || outOfCredits}
+              title={isImage ? "attach an image to edit" : "attach image or text file"}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+            >
+              <PaperclipIcon />
+            </button>
 
             {!isImage && dictation.supported && (
               <button
