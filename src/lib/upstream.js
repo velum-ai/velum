@@ -90,6 +90,7 @@ export function streamChat({
   model,
   messages,
   tools,
+  stop,
   signal,
   maxOutput = MAX_OUTPUT,
 }) {
@@ -102,6 +103,9 @@ export function streamChat({
   };
   if (REASONING_EFFORT !== "off") body.reasoning = { effort: REASONING_EFFORT };
   if (tools?.length) body.tools = tools;
+  // Forces generation to halt right after a prompt-based tool-call marker
+  // closes (see promptTools.js), instead of the model rambling on past it.
+  if (stop?.length) body.stop = stop;
 
   return fetch(`${BASE}/chat/completions`, {
     method: "POST",

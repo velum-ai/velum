@@ -143,6 +143,15 @@ export function isAllowedModel(model) {
   return Object.hasOwn(MODELS, model);
 }
 
+// Every "uncensored" tier model currently reports tools:false on OpenRouter's
+// live catalogue (checked directly, not assumed) - they go through the
+// prompt-based tool-calling fallback in promptTools.js instead of the real
+// `tools` API parameter, which they either reject outright or silently
+// ignore. Revisit per-model if a future uncensored release adds real support.
+export function needsPromptTools(model) {
+  return MODELS[model]?.tier === "uncensored";
+}
+
 // The starting pick set for an account that hasn't customized its model list.
 export const defaultModelIds = () =>
   Object.keys(MODELS).filter((id) => MODELS[id].default);

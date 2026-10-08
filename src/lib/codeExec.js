@@ -154,14 +154,32 @@ export async function runCode(code, outputFile) {
       .filter(Boolean);
     const out = parts.join("\n").trim();
     let file = await readOutputFile(sandbox, outputFile);
+    if (!file && outputFile) {
+      // The single most common miss: the code saved under a relative
+      // filename (e.g. canvas.Canvas("report.pdf", ...)) that lands in the
+      // sandbox's default working directory, while output_file was given as
+      // an absolute path - same basename, different place. Try it bare.
+      const base = outputFile.split("/").pop();
+      if (base && base !== outputFile) file = await readOutputFile(sandbox, base);
+    }
     if (!file) {
       const guessed = out.match(FILE_PATH_RE)?.[1];
       if (guessed && guessed !== outputFile) file = await readOutputFile(sandbox, guessed);
     }
-    return {
-      text: (out || (file ? `wrote ${file.name}` : "(no output)")).slice(0, MAX_OUTPUT_CHARS),
-      file,
-    };
+    let text;
+    if (file) {
+      text = out || `wrote ${file.name}`;
+    } else if (outputFile) {
+      // Say so plainly - a vague "(no output)" let past runs claim success
+      // on a file that was never actually produced.
+      text =
+        `error: output_file was set to "${outputFile}" but no file existed there (or under that name in the working directory) when the sandbox closed. ` +
+        `Check the exact path/filename your code saved to - it must match output_file exactly, or just use output_file itself as the save path.` +
+        (out ? `\n\n${out}` : "");
+    } else {
+      text = out || "(no output)";
+    }
+    return { text: text.slice(0, MAX_OUTPUT_CHARS), file };
   } catch (err) {
     logError("code_exec_failed", err);
     return { text: "error: sandbox failed to run this code", file: null };

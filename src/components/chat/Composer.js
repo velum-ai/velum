@@ -35,6 +35,7 @@ export default function Composer({
   mode = "chat",
   onToggleMode,
   imageEnabled,
+  visionCapable = true,
   holdEstimate,
 }) {
   const localRef = useRef(null);
@@ -188,7 +189,13 @@ export default function Composer({
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={sending || outOfCredits}
-              title={isImage ? "attach an image to edit" : "attach image or text file"}
+              title={
+                isImage
+                  ? "attach an image to edit"
+                  : visionCapable
+                    ? "attach image or text file"
+                    : "attach a text file (this model can't read images)"
+              }
               className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
             >
               <PaperclipIcon />

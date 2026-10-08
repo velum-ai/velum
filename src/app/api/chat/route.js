@@ -21,11 +21,18 @@ import {
   searchCredits,
   codeCredits,
   imageCredits,
+  needsPromptTools,
 } from "@/lib/pricing";
 import { searchText, searchConfigured } from "@/lib/webSearch";
 import { runCode, codeExecConfigured } from "@/lib/codeExec";
 import { fetchUrl } from "@/lib/fetchUrl";
 import { logError } from "@/lib/logger";
+import {
+  describeToolsForPrompt,
+  createToolCallScanner,
+  parseToolCall,
+  TOOL_CALL_STOP,
+} from "@/lib/promptTools";
 import {
   DEFAULT_MODEL,
   MAX_IMAGES,
@@ -368,6 +375,139 @@ async function* toolLoopEvents({
   };
 }
 
+// Prompt-based twin of toolLoopEvents, for models needsPromptTools() flags
+// (see promptTools.js for why). Same external event shape - { delta },
+// { reasoning }, { toolStart }, { toolEnd }, { toolFile }, { toolBilled },
+// a final combined { usage } - so exchange.js consumes either loop
+// identically and doesn't need to know which kind of model is running.
+async function* promptToolLoopEvents({ model, messages, maxOutput, signal, images }) {
+  let history = messages;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+
+  for (let i = 0; i <= MAX_TOOL_ROUNDS; i++) {
+    const roundsLeft = i < MAX_TOOL_ROUNDS;
+    let res;
+    try {
+      res = await streamChat({
+        model,
+        messages: history,
+        // out of rounds: no stop sequence, so a trailing marker just
+        // streams through as plain text instead of truncating a real answer
+        stop: roundsLeft ? [TOOL_CALL_STOP] : undefined,
+        maxOutput,
+        signal,
+      });
+    } catch (err) {
+      logError("upstream_request_failed", err, { model, round: i + 1 });
+      // Only the first round has no partial reply yet to fall back on - a
+      // later round's failure just ends the turn with whatever was already
+      // streamed, same as the native tool loop does.
+      if (i === 0) yield { error: "upstream request failed" };
+      break;
+    }
+    if (!res.ok || !res.body) {
+      const detail = await res.text().catch(() => "");
+      logError("upstream_api_error", new Error(detail || `status ${res.status}`), {
+        status: res.status,
+        model,
+        round: i + 1,
+      });
+      if (i === 0) yield { error: "the model provider had an error, try again" };
+      break;
+    }
+
+    const scan = createToolCallScanner();
+    let usage = null;
+    let roundText = "";
+    let rawCall = null;
+
+    for await (const ev of chatEvents(res.body)) {
+      if (ev.usage) usage = ev.usage;
+      if (ev.reasoning) yield { reasoning: ev.reasoning };
+      if (ev.delta) {
+        roundText += ev.delta;
+        for (const out of scan.feed(ev.delta)) {
+          if (out.delta) yield { delta: out.delta };
+          if (out.call) rawCall = out.call;
+        }
+        if (rawCall) break; // got a call, stop reading this round's stream
+      }
+    }
+    if (!rawCall) {
+      // the `stop` sequence above (when roundsLeft) makes the provider
+      // consume the closing marker itself and never stream it, so feed()
+      // alone never sees a complete call - recover it from the scanner's
+      // buffer now that the round's stream has actually ended.
+      const flushed = scan.flush();
+      if (flushed) rawCall = flushed.call;
+    }
+    totalPromptTokens += usage?.prompt_tokens || 0;
+    totalCompletionTokens += usage?.completion_tokens || 0;
+
+    if (!rawCall || !roundsLeft) break; // plain answer, or out of rounds - done
+
+    const call = parseToolCall(rawCall);
+    if (!call) {
+      // malformed JSON from the model - feed back an error so it can
+      // recover instead of the turn just silently ending
+      history = [
+        ...history,
+        { role: "assistant", content: roundText },
+        {
+          role: "user",
+          content: "[tool error] that wasn't valid JSON, try again or just answer normally.",
+        },
+      ];
+      continue;
+    }
+
+    let args = {};
+    try {
+      args = JSON.parse(call.arguments);
+    } catch {
+      // preview-only; runTool re-parses and handles this itself
+    }
+    yield {
+      toolStart: {
+        name: call.name,
+        code: args.code,
+        query: args.query,
+        url: args.url,
+        prompt: args.prompt,
+        outputFile: args.output_file,
+      },
+    };
+    const result = await runTool(call.name, call.arguments, images);
+    yield { toolEnd: { name: call.name, output: result.text } };
+    if (result.file) yield { toolFile: result.file };
+    yield { toolBilled: call.name };
+
+    // Weaker, non-tool-trained models tend to just paste a raw error back to
+    // the user instead of fixing it - spell out the recovery step instead of
+    // trusting that to be obvious from the error text alone.
+    const note = result.text.startsWith("error:")
+      ? " Fix the mistake and call the tool again, or explain the problem in your own words. Never show this raw error text to the user."
+      : "";
+
+    history = [
+      ...history,
+      { role: "assistant", content: roundText },
+      {
+        role: "user",
+        content: `[tool result for ${call.name}]\n${result.text}\n[/tool result]${note}`,
+      },
+    ];
+  }
+
+  yield {
+    usage: {
+      prompt_tokens: totalPromptTokens,
+      completion_tokens: totalCompletionTokens,
+    },
+  };
+}
+
 export async function POST(req) {
   if (!upstreamConfigured()) return bad("chat is not configured", 503);
   if (Number(req.headers.get("content-length") || 0) > MAX_REQUEST_BYTES) {
@@ -441,14 +581,8 @@ export async function POST(req) {
     ? sanitizeHistory(clientHistory)
     : await getHistory(account, chatId, HISTORY_WINDOW);
 
-  const systemPrompt = g.record?.systemPrompt || null;
+  const baseSystemPrompt = g.record?.systemPrompt || null;
 
-  // reserve against the whole resent prompt, not just the new message
-  const promptParts = [
-    ...(systemPrompt ? [systemPrompt] : []),
-    ...history.map((m) => m.content),
-    ...(appendUser ? [messageText] : []),
-  ];
   const tools = [
     ...(codeExecConfigured() ? [RUN_PYTHON_TOOL] : []),
     ...(searchConfigured() ? [WEB_SEARCH_TOOL] : []),
@@ -456,6 +590,21 @@ export async function POST(req) {
     FETCH_URL_TOOL, // no third-party key needed, always available
   ];
   const wantsTools = tools.length > 0 && appendUser;
+  // Models with no native tool-calling support get the tool list described
+  // in plain text instead (see promptTools.js); this has to be folded into
+  // systemPrompt before promptParts/messages are built below so the
+  // reservation estimate and the actual request both include it.
+  const usesPromptTools = wantsTools && needsPromptTools(model);
+  const systemPrompt = usesPromptTools
+    ? [baseSystemPrompt, describeToolsForPrompt(tools)].filter(Boolean).join("\n\n")
+    : baseSystemPrompt;
+
+  // reserve against the whole resent prompt, not just the new message
+  const promptParts = [
+    ...(systemPrompt ? [systemPrompt] : []),
+    ...history.map((m) => m.content),
+    ...(appendUser ? [messageText] : []),
+  ];
   const base = worstCaseCredits(model, promptParts.join("\n"));
   // Worst case is MAX_TOOL_ROUNDS + 1 full completion calls (each tool round
   // triggers one more), plus the single priciest tool surcharge per round.
@@ -495,60 +644,87 @@ export async function POST(req) {
   ];
 
   const maxOutput = MAX_OUTPUT;
-  let usingTools = wantsTools;
-  let upstream;
-  try {
-    upstream = await streamChat({
+  let usingTools = wantsTools && !usesPromptTools;
+  let events;
+
+  if (usesPromptTools) {
+    // No upstream call here - promptToolLoopEvents makes its own, every
+    // round including the first, since (unlike the native tool loop) there's
+    // no plain "first completion" to reuse as a non-tool fallback.
+    events = promptToolLoopEvents({
       model,
       messages,
-      tools: usingTools ? tools : undefined,
       maxOutput,
       signal: req.signal,
+      images,
     });
-  } catch (err) {
-    logError("upstream_request_failed", err, { model });
-    await settleCredits(r.reservationId, 0);
-    return bad("upstream request failed", 502);
-  }
+  } else {
+    let upstream;
+    try {
+      upstream = await streamChat({
+        model,
+        messages,
+        tools: usingTools ? tools : undefined,
+        maxOutput,
+        signal: req.signal,
+      });
+    } catch (err) {
+      logError("upstream_request_failed", err, { model });
+      await settleCredits(r.reservationId, 0);
+      return bad("upstream request failed", 502);
+    }
 
-  // Some models on OpenRouter have no endpoint that supports tool use at
-  // all, and 404 the whole request rather than just ignoring the tool.
-  // Degrade to a normal, tools-off request instead of failing the chat.
-  if (!upstream.ok && usingTools) {
-    const detail = await upstream.text().catch(() => "");
-    if (/tool use|tool_use|tool compatibility/i.test(detail)) {
-      usingTools = false;
-      try {
-        upstream = await streamChat({ model, messages, maxOutput, signal: req.signal });
-      } catch (err) {
-        logError("upstream_request_failed", err, { model });
+    // Some models on OpenRouter have no endpoint that supports tool use at
+    // all, and 404 the whole request rather than just ignoring the tool.
+    // Degrade to a normal, tools-off request instead of failing the chat.
+    if (!upstream.ok && usingTools) {
+      const detail = await upstream.text().catch(() => "");
+      if (/tool use|tool_use|tool compatibility/i.test(detail)) {
+        usingTools = false;
+        try {
+          upstream = await streamChat({ model, messages, maxOutput, signal: req.signal });
+        } catch (err) {
+          logError("upstream_request_failed", err, { model });
+          await settleCredits(r.reservationId, 0);
+          return bad("upstream request failed", 502);
+        }
+      } else {
+        logError("upstream_api_error", new Error(detail || `status ${upstream.status}`), {
+          status: upstream.status,
+          model,
+        });
         await settleCredits(r.reservationId, 0);
-        return bad("upstream request failed", 502);
+        return bad("the model provider had an error, try again", 502);
       }
-    } else {
+    }
+
+    if (!upstream.ok || !upstream.body) {
+      const detail = await upstream.text().catch(() => "");
       logError("upstream_api_error", new Error(detail || `status ${upstream.status}`), {
         status: upstream.status,
         model,
       });
-      await settleCredits(r.reservationId, 0);
-      return bad("the model provider had an error, try again", 502);
+      await settleCredits(r.reservationId, 0); // full refund, nothing was generated
+      const msg =
+        upstream.status === 429
+          ? "the model is busy right now, try again in a moment"
+          : upstream.status === 402 || upstream.status === 403
+            ? "this model is temporarily unavailable, try another"
+            : "the model provider had an error, try again";
+      return bad(msg, 502);
     }
-  }
 
-  if (!upstream.ok || !upstream.body) {
-    const detail = await upstream.text().catch(() => "");
-    logError("upstream_api_error", new Error(detail || `status ${upstream.status}`), {
-      status: upstream.status,
-      model,
-    });
-    await settleCredits(r.reservationId, 0); // full refund, nothing was generated
-    const msg =
-      upstream.status === 429
-        ? "the model is busy right now, try again in a moment"
-        : upstream.status === 402 || upstream.status === 403
-          ? "this model is temporarily unavailable, try another"
-          : "the model provider had an error, try again";
-    return bad(msg, 502);
+    events = usingTools
+      ? toolLoopEvents({
+          firstEvents: chatEvents(upstream.body),
+          model,
+          messages,
+          tools,
+          maxOutput,
+          signal: req.signal,
+          images,
+        })
+      : chatEvents(upstream.body);
   }
 
   const storedMessage = [
@@ -568,17 +744,7 @@ export async function POST(req) {
     storedMessage,
     images,
     files,
-    events: usingTools
-      ? toolLoopEvents({
-          firstEvents: chatEvents(upstream.body),
-          model,
-          messages,
-          tools,
-          maxOutput,
-          signal: req.signal,
-          images,
-        })
-      : chatEvents(upstream.body),
+    events,
     appendUser,
     ephemeral: !!ephemeral,
   });

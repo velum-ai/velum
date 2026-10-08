@@ -13,6 +13,7 @@ import ProjectsView from "@/components/chat/ProjectsView";
 import CommandPalette from "@/components/chat/CommandPalette";
 import ShortcutsSheet from "@/components/chat/ShortcutsSheet";
 import DocPanel from "@/components/chat/DocPanel";
+import AttachmentsPanel from "@/components/chat/AttachmentsPanel";
 import {
   DEFAULT_MODEL,
   STORAGE_KEY,
@@ -140,6 +141,7 @@ export default function ChatPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchScope, setSearchScope] = useState(null); // { projectId, name } | null
   const [docPanel, setDocPanel] = useState(null); // { status, name, url? } | null
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [booting, setBooting] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
   const inputRef = useRef(null);
@@ -159,7 +161,15 @@ export default function ChatPage() {
 
   const outOfCredits = credits === 0;
 
+  // Image mode always goes through the dedicated image model (always vision
+  // capable); regular chat only if the selected model's tier says so - most
+  // uncensored/efficient-tier models have no image input at all on
+  // OpenRouter and otherwise fail upstream with a cryptic 404 mid-stream.
+  const visionCapable =
+    mode === "image" || models.find((m) => m.id === model)?.tier === "vision";
+
   const addImages = (fileList) => {
+    if (!visionCapable) return;
     for (const file of fileList) {
       if (!IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES) {
         continue;
@@ -586,7 +596,7 @@ export default function ChatPage() {
                 url: doc.url,
                 mime: doc.mime,
               }
-            : null;
+            : { status: "failed", name: prev.name };
         });
       }
 
@@ -1070,6 +1080,7 @@ export default function ChatPage() {
           chatId={ephemeral ? null : activeChatId}
           shared={shared}
           onToggleShared={toggleShared}
+          onOpenAttachments={() => setAttachmentsOpen(true)}
           minimal={view === "projects"}
         />
 
@@ -1127,13 +1138,19 @@ export default function ChatPage() {
               onSend={onSend}
               fileInputRef={fileInputRef}
               onFilesSelected={handleFiles}
-              fileAccept={(mode === "image" ? IMAGE_TYPES : [...IMAGE_TYPES, ...FILE_TYPES]).join(",")}
+              fileAccept={(mode === "image"
+                ? IMAGE_TYPES
+                : visionCapable
+                  ? [...IMAGE_TYPES, ...FILE_TYPES]
+                  : FILE_TYPES
+              ).join(",")}
               inputRef={inputRef}
               mode={mode}
               onToggleMode={() =>
                 setMode((m) => (m === "image" ? "chat" : "image"))
               }
               imageEnabled={Boolean(imageInfo)}
+              visionCapable={visionCapable}
               holdEstimate={holdEstimate}
             />
           </>
@@ -1141,6 +1158,11 @@ export default function ChatPage() {
       </div>
 
       <DocPanel doc={docPanel} onClose={() => setDocPanel(null)} />
+      <AttachmentsPanel
+        open={attachmentsOpen}
+        messages={messages}
+        onClose={() => setAttachmentsOpen(false)}
+      />
 
       <CommandPalette
         open={paletteOpen}

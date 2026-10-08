@@ -103,6 +103,11 @@ export default function DocPanel({ doc, onClose }) {
               <CodeViewer url={doc.url} name={doc.name} />
             )}
           </div>
+        ) : doc.status === "failed" ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+            <p className="font-chat text-sm text-muted">couldn&apos;t create {doc.name}</p>
+            <p className="font-chat text-xs text-faint">the model ran into an error, try asking again</p>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="thinking">

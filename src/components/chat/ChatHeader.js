@@ -11,6 +11,7 @@ import {
   ShareIcon,
   CopyIcon,
   CheckIcon,
+  PaperclipIcon,
 } from "@/components/chat/icons";
 import ModelPicker from "@/components/chat/ModelPicker";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -28,6 +29,7 @@ export default function ChatHeader({
   chatId,
   shared,
   onToggleShared,
+  onOpenAttachments,
   minimal = false,
 }) {
   const options = models.length
@@ -116,10 +118,21 @@ export default function ChatHeader({
             <IncognitoIcon />
           </button>
 
+          <button
+            onClick={chatId ? onOpenAttachments : undefined}
+            disabled={!chatId}
+            suppressHydrationWarning
+            title={chatId ? "view all attachments in this chat" : "send a message first"}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-transparent text-faint transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <PaperclipIcon />
+          </button>
+
           <div ref={shareRef} className="relative">
             <button
               onClick={chatId ? handleShareClick : undefined}
               disabled={!chatId}
+              suppressHydrationWarning
               title={
                 !chatId
                   ? "send a message first to share this chat"

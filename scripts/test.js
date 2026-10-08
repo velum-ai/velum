@@ -16,6 +16,7 @@ const FILES = [
   "webSearch.js",
   "codeExec.js",
   "fetchUrl.js",
+  "promptTools.js",
 ];
 
 let failed = 0;
