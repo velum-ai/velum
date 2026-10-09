@@ -362,7 +362,10 @@ export default function AccountPage() {
 
         {/* add credit */}
         <Card label="add credit">
-          <span className="-mt-1 text-xs text-faint">100 credits = $1.00.</span>
+          <span className="-mt-1 text-xs text-faint">
+            100 credits = $1.00.
+            {!data?.methods?.btcpay && " monero support coming soon."}
+          </span>
           {data?.methods?.btcpay && (
             <span className="flex w-fit overflow-hidden rounded-md border border-border">
               {[

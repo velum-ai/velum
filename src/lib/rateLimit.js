@@ -1,4 +1,13 @@
+import { createHash, createHmac } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+
+// Same dev-fallback pattern as sign.js/crypto.js: process-stable, rotates if
+// DATABASE_URL changes. Set APP_SECRET in production.
+const SECRET =
+  process.env.APP_SECRET ||
+  createHash("sha256")
+    .update(process.env.DATABASE_URL || "velum-dev-secret")
+    .digest("hex");
 
 // Fixed-window limiter backed by the RateLimit table: one atomic upsert per
 // call, durable across restarts, shared by every app instance. The window
@@ -32,8 +41,15 @@ export async function pruneRateLimits() {
 // Behind Cloudflare the origin has no public port, so CF-Connecting-IP is
 // trustworthy. The other headers are fallbacks - spoofable if the origin is
 // reachable directly, so keep it locked to Cloudflare (see README).
-export const clientIp = (req) =>
+const rawClientIp = (req) =>
   req.headers.get("cf-connecting-ip") ||
   req.headers.get("x-real-ip") ||
   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
   "unknown";
+
+// HMAC rather than a plain hash - IPv4 space is small enough to brute-force
+// a rainbow table against an unsalted hash in seconds, so the raw address
+// must never land in the RateLimit table or any log line. Same bucketing
+// behavior either way: one real IP always hashes to the same key.
+export const clientIp = (req) =>
+  createHmac("sha256", SECRET).update(rawClientIp(req)).digest("hex").slice(0, 32);
