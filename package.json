@@ -23,6 +23,7 @@
     "db:wipe": "node --import ./scripts/loader.mjs scripts/wipe-db.js",
     "db:encrypt-existing": "node --import ./scripts/loader.mjs scripts/encrypt-existing.js",
     "db:encrypt-attachments": "node --import ./scripts/loader.mjs scripts/encrypt-attachments.js",
+    "db:migrate-per-account-keys": "node --import ./scripts/loader.mjs scripts/migrate-per-account-keys.js",
     "create-account": "node --import ./scripts/loader.mjs scripts/create-account.js",
     "grant-credit": "node --import ./scripts/loader.mjs scripts/grant-credit.js",
     "delete-account": "node --import ./scripts/loader.mjs scripts/delete-account.js",

@@ -123,7 +123,7 @@ const RUN_PYTHON_TOOL = {
   function: {
     name: "run_python",
     description:
-      "Execute Python code in an isolated sandbox and return its output (stdout plus the last expression's value, or an error). Use it for calculations, data work, or checking an answer before replying. To hand the user a real downloadable file (PDF, image, csv...), write it to disk with a real, standard library (reportlab for PDFs, matplotlib for charts/images, the csv/json stdlib modules, etc.) AND set output_file to that exact path in this same call, every time you write a file. This is required, not optional: if you write a file but leave output_file empty, the user gets NOTHING. Just import and use whatever real library best fits the file type, as if it's already installed, if it happens to be missing this platform installs it and retries automatically, you never need to pip install anything yourself. Never hand-roll a file format's raw bytes yourself (e.g. writing PDF syntax by hand) even if you're unsure a library is available, the real library is always more reliable and is handled for you. The app shows the file to the user itself, as a real attachment with its name and a preview right there, the instant output_file is set correctly, so never mention the sandbox path (e.g. /tmp/report.pdf) anywhere in your reply text, not as plain text and not as a markdown link, it is meaningless outside the sandbox and the sandbox is gone right after this call. Keep your reply about the file itself short and natural, one line is usually enough, the UI already shows its name and a preview, so don't restate the filename or announce a formal title for it. Don't add disclaimers, watermarks, or \"created for X purposes\" notices inside the document either unless the user actually asked for one. Nothing persists between separate calls, and there's no general internet access beyond installing libraries.",
+      "Execute Python code in an isolated sandbox and return its output (stdout plus the last expression's value, or an error). Use it for calculations, data work, or checking an answer before replying. To hand the user a real downloadable file (PDF, image, csv...), write it to disk with a real, standard library (reportlab for PDFs, matplotlib for charts/images, the csv/json stdlib modules, etc.) AND set output_file to that exact path in this same call, every time you write a file. This is required, not optional: if you write a file but leave output_file empty, the user gets NOTHING. Just import and use whatever real library best fits the file type, as if it's already installed, if it happens to be missing this platform installs it and retries automatically, you never need to pip install anything yourself. Never hand-roll a file format's raw bytes yourself (e.g. writing PDF syntax by hand) even if you're unsure a library is available, the real library is always more reliable and is handled for you. The app shows the file to the user itself, as a real attachment with its name and a preview right there, the instant output_file is set correctly, so never mention the sandbox path (e.g. /tmp/report.pdf) anywhere in your reply text, not as plain text and not as a markdown link, it is meaningless outside the sandbox and the sandbox is gone right after this call. Keep your reply about the file itself short and natural, one line is usually enough, the UI already shows its name and a preview, so don't restate the filename or announce a formal title for it. Don't add disclaimers, watermarks, or \"created for X purposes\" notices inside the document either unless the user actually asked for one. Nothing persists between separate calls, and there's no general internet access beyond installing libraries. The sandbox cannot see any image already in this chat, uploaded or generated earlier - there is no file at a guessed path like /tmp/whatever.png for it, and trying to open one will just error. If the user wants an earlier image included in something new, say plainly that you can't pull a prior image into this tool (code can only use images it generates itself, in that same call) rather than guessing a path or pretending it worked.",
     parameters: {
       type: "object",
       properties: {
@@ -581,7 +581,22 @@ export async function POST(req) {
     ? sanitizeHistory(clientHistory)
     : await getHistory(account, chatId, HISTORY_WINDOW);
 
-  const baseSystemPrompt = g.record?.systemPrompt || null;
+  // Always included, ahead of the account's own custom instructions (which
+  // can still set tone/persona on top of this, not replace these facts) -
+  // so any model, on any account, can answer "what is velum" / "what can
+  // you do here" accurately instead of guessing or staying silent.
+  const ABOUT_VELUM =
+    "If asked about velum (this app) or what you can do here, answer from this, plainly, without over-explaining unless asked for detail: " +
+    "velum is anonymous ai chat - no email or password, just a random 16-digit account number as the only identity. " +
+    "it's pay-as-you-go: 100 credits = $1.00, billed for the tokens actually used, unused credit never expires, no subscription. " +
+    "paid via card/apple pay/google pay/bank transfer (dodo payments); monero is coming soon. " +
+    "users pick from a curated model catalogue (openrouter) grouped into efficient, flagship, coding, vision, long context, and uncensored. " +
+    "you (the model) can automatically use tools when they'd help: web search, fetching a specific page's content, running python in an isolated sandbox (for calculations, files, charts, pdfs...), and generating images - each real use adds a small flat cost shown in the reply. " +
+    "chats can be grouped into projects, and a chat can be shared via a public link. " +
+    "message content, titles, and custom instructions are encrypted at rest. " +
+    "it's open source and self-hostable (AGPL-3.0).";
+
+  const baseSystemPrompt = [ABOUT_VELUM, g.record?.systemPrompt].filter(Boolean).join("\n\n");
 
   const tools = [
     ...(codeExecConfigured() ? [RUN_PYTHON_TOOL] : []),

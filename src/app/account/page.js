@@ -362,30 +362,30 @@ export default function AccountPage() {
 
         {/* add credit */}
         <Card label="add credit">
-          <span className="-mt-1 text-xs text-faint">
-            100 credits = $1.00.
-            {!data?.methods?.btcpay && " monero support coming soon."}
-          </span>
-          {data?.methods?.btcpay && (
-            <span className="flex w-fit overflow-hidden rounded-md border border-border">
-              {[
-                { id: "dodo", label: "card & more" },
-                { id: "btcpay", label: "monero" },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setMethod(m.id)}
-                  className={`px-3 py-1 text-xs transition-colors ${
-                    method === m.id
+          <span className="-mt-1 text-xs text-faint">100 credits = $1.00.</span>
+          <span className="flex w-fit overflow-hidden rounded-md border border-border">
+            {[
+              { id: "dodo", label: "card & more" },
+              { id: "btcpay", label: "monero", soon: !data?.methods?.btcpay },
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => !m.soon && setMethod(m.id)}
+                disabled={m.soon}
+                title={m.soon ? "not yet implemented" : undefined}
+                className={`px-3 py-1 text-xs transition-colors ${
+                  m.soon
+                    ? "cursor-not-allowed text-faint/50"
+                    : method === m.id
                       ? "bg-surface-2 text-foreground"
                       : "text-faint hover:text-muted"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </span>
-          )}
+                }`}
+              >
+                {m.label}
+                {m.soon && " (coming soon)"}
+              </button>
+            ))}
+          </span>
           {added > 0 && (
             <p className="rounded-md border border-border px-3 py-2 text-sm">
               added {added.toLocaleString()} credits.

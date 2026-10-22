@@ -54,7 +54,7 @@ export async function saveAttachment({
       name,
     },
   });
-  await writeFile(fileFor(row.id, mime), encryptBuffer(buffer));
+  await writeFile(fileFor(row.id, mime), encryptBuffer(accountId, buffer));
   return row;
 }
 
@@ -66,7 +66,10 @@ export async function readAttachment(id) {
   const row = await prisma.attachment.findUnique({ where: { id: clean } });
   if (!row) return null;
   try {
-    return { mime: row.mime, body: decryptBuffer(await readFile(fileFor(row.id, row.mime))) };
+    return {
+      mime: row.mime,
+      body: decryptBuffer(row.accountId, await readFile(fileFor(row.id, row.mime))),
+    };
   } catch {
     return null;
   }

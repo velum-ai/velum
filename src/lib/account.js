@@ -16,19 +16,23 @@ import {
 // module only ever see plaintext. decryptText throws on a row it can't
 // decrypt (wrong key, corrupted data); one bad row degrades to a placeholder
 // instead of 500ing the whole request.
-function safeDecrypt(value) {
+function safeDecrypt(accountId, value) {
   if (value == null) return value;
   try {
-    return decryptText(value);
+    return decryptText(accountId, value);
   } catch (err) {
     logError("decrypt_failed", err);
     return "[unable to decrypt]";
   }
 }
 
-const decMessage = (m) =>
-  m && { ...m, content: safeDecrypt(m.content), reasoning: safeDecrypt(m.reasoning) };
-const decChat = (c) => c && { ...c, title: safeDecrypt(c.title) };
+const decMessage = (accountId, m) =>
+  m && {
+    ...m,
+    content: safeDecrypt(accountId, m.content),
+    reasoning: safeDecrypt(accountId, m.reasoning),
+  };
+const decChat = (accountId, c) => c && { ...c, title: safeDecrypt(accountId, c.title) };
 
 const GROUPS = 4;
 const TITLE_MAX = 40;
@@ -96,7 +100,7 @@ export async function findAccount(number) {
     where: { number },
     select: { number: true, credits: true, systemPrompt: true, createdAt: true, enabledModels: true },
   });
-  return acc && { ...acc, systemPrompt: safeDecrypt(acc.systemPrompt) };
+  return acc && { ...acc, systemPrompt: safeDecrypt(number, acc.systemPrompt) };
 }
 
 const PREVIEW_LEN = 120;
@@ -124,13 +128,13 @@ export async function listChats(number) {
       })
     : [];
   const previewByChat = new Map(
-    lastMessages.map((m) => [m.chatId, safeDecrypt(m.content)]),
+    lastMessages.map((m) => [m.chatId, safeDecrypt(number, m.content)]),
   );
 
   return chats.map((c) => {
     const raw = previewByChat.get(c.id);
     const preview = raw ? raw.replace(/\s+/g, " ").trim().slice(0, PREVIEW_LEN) : null;
-    return { ...decChat(c), preview };
+    return { ...decChat(number, c), preview };
   });
 }
 
@@ -164,22 +168,36 @@ export async function getChat(number, chatId) {
       messages: { orderBy: { id: "asc" }, select: MESSAGE_SELECT },
     },
   });
-  return chat && { ...decChat(chat), messages: chat.messages.map(decMessage) };
+  return (
+    chat && {
+      ...decChat(number, chat),
+      messages: chat.messages.map((m) => decMessage(number, m)),
+    }
+  );
 }
 
 // Public, read-only: no account scoping, gated on shared=true instead. The
 // chat id (an unguessable uuid) is the only secret, same trust model as
-// attachment ids.
+// attachment ids. Still needs the owning account's id to derive the right
+// key - shared=true chats are public to read, not exempt from encryption.
 export async function getSharedChat(chatId) {
   const chat = await prisma.chat.findFirst({
     where: { id: chatId, shared: true },
     select: {
       id: true,
       title: true,
+      accountId: true,
       messages: { orderBy: { id: "asc" }, select: PUBLIC_MESSAGE_SELECT },
     },
   });
-  return chat && { ...decChat(chat), messages: chat.messages.map(decMessage) };
+  if (!chat) return null;
+  // accountId is only fetched to derive the decryption key - the public
+  // share response must never carry it.
+  const { accountId, ...rest } = chat;
+  return {
+    ...decChat(accountId, rest),
+    messages: chat.messages.map((m) => decMessage(accountId, m)),
+  };
 }
 
 // Last `limit` messages of a chat, oldest-first, scoped to the account.
@@ -191,7 +209,7 @@ export async function getHistory(number, chatId, limit) {
     take: limit,
     select: { role: true, content: true },
   });
-  return rows.reverse().map((m) => ({ ...m, content: safeDecrypt(m.content) }));
+  return rows.reverse().map((m) => ({ ...m, content: safeDecrypt(number, m.content) }));
 }
 
 // Atomically hold `amount` credits and record the reservation. Short balance ->
@@ -260,10 +278,10 @@ async function findOrCreateChat(tx, accountId, chatId, seedTitle) {
         select: { id: true, title: true },
       }))) ||
     (await tx.chat.create({
-      data: { accountId, title: encryptText(titleFrom(seedTitle)) },
+      data: { accountId, title: encryptText(accountId, titleFrom(seedTitle)) },
       select: { id: true, title: true },
     }));
-  return decChat(chat);
+  return decChat(accountId, chat);
 }
 
 // Settle the reservation AND persist the exchange in one transaction. Writes
@@ -288,7 +306,11 @@ export function finalizeExchange({
     let userMessageId = null;
     if (appendUser) {
       const um = await tx.message.create({
-        data: { chatId: chat.id, role: "user", content: encryptText(String(userContent ?? "")) },
+        data: {
+          chatId: chat.id,
+          role: "user",
+          content: encryptText(accountId, String(userContent ?? "")),
+        },
         select: { id: true },
       });
       userMessageId = um.id;
@@ -297,10 +319,10 @@ export function finalizeExchange({
       data: {
         chatId: chat.id,
         role: "assistant",
-        content: encryptText(String(replyContent ?? "")),
+        content: encryptText(accountId, String(replyContent ?? "")),
         model: model ?? null,
         cost: actual,
-        reasoning: encryptText(reasoning || null),
+        reasoning: encryptText(accountId, reasoning || null),
       },
       select: { id: true },
     });
@@ -340,13 +362,17 @@ export function finalizeImageExchange({
     const chat = await findOrCreateChat(tx, accountId, chatId, prompt);
 
     await tx.message.create({
-      data: { chatId: chat.id, role: "user", content: encryptText(String(prompt ?? "")) },
+      data: {
+        chatId: chat.id,
+        role: "user",
+        content: encryptText(accountId, String(prompt ?? "")),
+      },
     });
     const am = await tx.message.create({
       data: {
         chatId: chat.id,
         role: "assistant",
-        content: encryptText("[generated an image]"),
+        content: encryptText(accountId, "[generated an image]"),
         model: IMAGE_MODEL,
         cost: actual,
       },
@@ -387,7 +413,7 @@ export async function renameChat(number, chatId, title) {
   if (!clean) return null;
   const { count } = await prisma.chat.updateMany({
     where: { id: chatId, accountId: number },
-    data: { title: encryptText(clean) },
+    data: { title: encryptText(number, clean) },
   });
   return count ? { id: chatId, title: clean } : null;
 }
@@ -478,7 +504,7 @@ export async function updateSystemPrompt(number, text) {
   const clean = String(text ?? "").trim().slice(0, SYSTEM_PROMPT_MAX);
   const { count } = await prisma.account.updateMany({
     where: { number },
-    data: { systemPrompt: encryptText(clean || null) },
+    data: { systemPrompt: encryptText(number, clean || null) },
   });
   return count ? { systemPrompt: clean || null } : null;
 }
@@ -562,8 +588,11 @@ export async function exportAccount(number) {
 
   return {
     exportedAt: new Date().toISOString(),
-    account: { ...acc, systemPrompt: safeDecrypt(acc.systemPrompt) },
-    chats: chats.map((c) => ({ ...decChat(c), messages: c.messages.map(decMessage) })),
+    account: { ...acc, systemPrompt: safeDecrypt(number, acc.systemPrompt) },
+    chats: chats.map((c) => ({
+      ...decChat(number, c),
+      messages: c.messages.map((m) => decMessage(number, m)),
+    })),
     payments,
   };
 }
@@ -598,7 +627,7 @@ export async function searchMessages(number, q) {
     cursor = rows[rows.length - 1].id;
 
     for (const m of rows) {
-      const content = safeDecrypt(m.content);
+      const content = safeDecrypt(number, m.content);
       const i = content.toLowerCase().indexOf(needle);
       if (i === -1) continue;
       const start = Math.max(0, i - 40);
@@ -606,7 +635,12 @@ export async function searchMessages(number, q) {
         (start > 0 ? "…" : "") +
         content.slice(start, i + term.length + 60).replace(/\s+/g, " ").trim() +
         "…";
-      results.push({ chatId: m.chatId, title: safeDecrypt(m.chat.title), messageId: m.id, snippet });
+      results.push({
+        chatId: m.chatId,
+        title: safeDecrypt(number, m.chat.title),
+        messageId: m.id,
+        snippet,
+      });
       if (results.length >= SEARCH_LIMIT) break;
     }
     if (rows.length < SEARCH_BATCH) break; // exhausted this account's messages
@@ -630,7 +664,7 @@ export async function accountOverview(number, preloaded) {
             where: { number },
             select: { credits: true, createdAt: true, systemPrompt: true, enabledModels: true },
           })
-          .then((a) => a && { ...a, systemPrompt: safeDecrypt(a.systemPrompt) }),
+          .then((a) => a && { ...a, systemPrompt: safeDecrypt(number, a.systemPrompt) }),
     prisma.chat.count({ where: { accountId: number } }),
     // cost is only ever set on assistant messages, so counting non-null cost
     // is the same as counting assistant messages - one query instead of two.
