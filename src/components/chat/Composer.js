@@ -28,6 +28,8 @@ export default function Composer({
   sending,
   onStop,
   onSend,
+  queue = [],
+  onRemoveQueued,
   fileInputRef,
   onFilesSelected,
   fileAccept,
@@ -84,10 +86,10 @@ export default function Composer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
   }, [input, ref]);
 
-  const canSend = Boolean(
-    !outOfCredits &&
-      (input.trim() || (!isImage && (images.length > 0 || files.length > 0))),
+  const hasDraft = Boolean(
+    input.trim() || (!isImage && (images.length > 0 || files.length > 0)),
   );
+  const canSend = Boolean(!outOfCredits && hasDraft);
   const lowBalance =
     !outOfCredits &&
     typeof credits === "number" &&
@@ -125,6 +127,29 @@ export default function Composer({
               top up
             </Link>
           </p>
+        )}
+
+        {queue.length > 0 && (
+          <div className="mb-2 flex flex-col gap-1">
+            {queue.map((q) => (
+              <div
+                key={q.id}
+                className="animate-in flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 font-chat text-xs text-faint"
+              >
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-faint/70">
+                  queued
+                </span>
+                <span className="min-w-0 flex-1 truncate text-muted">{q.text}</span>
+                <button
+                  onClick={() => onRemoveQueued?.(q.id)}
+                  title="remove from queue"
+                  className="shrink-0 text-faint transition-colors hover:text-foreground"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
@@ -247,20 +272,31 @@ export default function Composer({
             />
 
             {sending ? (
-              <button
-                onClick={onStop}
-                title="stop"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-foreground text-background transition hover:opacity-80"
-              >
-                <StopIcon />
-              </button>
+              <>
+                {hasDraft && (
+                  <button
+                    onClick={onSend}
+                    title="queue this message, sent once the current reply finishes"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border text-muted transition-all duration-150 hover:bg-surface-2 hover:text-foreground active:scale-90"
+                  >
+                    <ArrowUpIcon />
+                  </button>
+                )}
+                <button
+                  onClick={onStop}
+                  title="stop"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-foreground text-background transition-all duration-150 hover:opacity-80 active:scale-90"
+                >
+                  <StopIcon />
+                </button>
+              </>
             ) : (
               <button
                 onClick={onSend}
                 disabled={!canSend}
                 suppressHydrationWarning
                 title={isImage ? "generate" : "send"}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-foreground text-background transition hover:opacity-80 disabled:opacity-20"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-foreground text-background transition-all duration-150 hover:opacity-80 active:scale-90 disabled:opacity-20 disabled:active:scale-100"
               >
                 {isImage ? <ImageIcon /> : <ArrowUpIcon />}
               </button>

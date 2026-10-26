@@ -108,6 +108,22 @@ function MessageRow({
     () => (isUser ? null : renderMarkdown(msg.content)),
     [isUser, msg.content],
   );
+
+  // Streamed text replaces its whole innerHTML on every paint tick (markdown
+  // can't be patched incrementally), which pops in with no transition of its
+  // own. Retrigger a quick fade on the container each time new content lands
+  // so it reads as arriving smoothly instead of just appearing - forcing a
+  // reflow between removing and re-adding the class is what makes the CSS
+  // animation restart instead of silently no-op on an already-applied class.
+  const contentRef = useRef(null);
+  useEffect(() => {
+    if (!streaming) return;
+    const el = contentRef.current;
+    if (!el) return;
+    el.classList.remove("stream-pulse");
+    void el.offsetWidth;
+    el.classList.add("stream-pulse");
+  }, [msg.content, streaming]);
   const pics = imagesOf(msg);
   const files = filesOf(msg);
   const modelLabel = MODEL_LABELS[msg.model] || msg.model;
@@ -209,6 +225,7 @@ function MessageRow({
           </div>
         ) : (
           <div
+            ref={contentRef}
             className="md-prose w-full max-w-none"
             dangerouslySetInnerHTML={{ __html: html }}
           />

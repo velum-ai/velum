@@ -184,6 +184,25 @@
   }
 }
 
+/* streamed reply text: a quick fade retriggered on every paint tick (see
+   MessageList.js) so new content reads as arriving, not just popping in */
+.stream-pulse {
+  animation: stream-pulse 0.3s ease-out both;
+}
+@keyframes stream-pulse {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-pulse {
+    animation: none;
+  }
+}
+
 /* markdown in assistant replies */
 .md-prose {
   font-family: var(--font-chat);

@@ -129,6 +129,10 @@ export default function ChatPage() {
   const [images, setImages] = useState([]);
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
+  // messages sent while one is already streaming, run automatically in
+  // order once the current one finishes - see the effect below runChat/
+  // generateImage's definitions
+  const [queue, setQueue] = useState([]);
   const [mode, setMode] = useState("chat");
   const [editingChatId, setEditingChatId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
@@ -799,29 +803,69 @@ export default function ChatPage() {
     }
   };
 
+  // Queues a message instead of blocking send while one is already
+  // streaming - clears the composer right away so queuing feels as
+  // responsive as actually sending.
+  const queueMessage = (item) => {
+    setQueue((q) => [...q, { id: `${Date.now()}-${Math.random()}`, ...item }]);
+    setInput("");
+    if (draftKey) writeLS(draftKey, "");
+    setImages([]);
+    setFiles([]);
+  };
+
+  const removeQueued = (id) => setQueue((q) => q.filter((m) => m.id !== id));
+
   const onSend = () => {
     const text = input.trim();
     if (mode === "image") {
-      if (text) generateImage(text, null, images);
+      if (!text) return;
+      if (sending) {
+        queueMessage({ kind: "image", text, imgs: images });
+        return;
+      }
+      generateImage(text, null, images);
       return;
     }
-    if (
-      (!text && images.length === 0 && files.length === 0) ||
-      sending ||
-      outOfCredits
-    ) {
+    if ((!text && images.length === 0 && files.length === 0) || outOfCredits) {
       return;
     }
     const imgPrompt =
       images.length === 0 && files.length === 0
         ? detectImagePrompt(text)
         : null;
+    if (sending) {
+      queueMessage(
+        imgPrompt
+          ? { kind: "image", text: imgPrompt, imgs: [] }
+          : { kind: "chat", text, imgs: images, docs: files },
+      );
+      return;
+    }
     if (imgPrompt) {
       generateImage(imgPrompt);
       return;
     }
     runChat({ text, imgs: images, docs: files });
   };
+
+  /* eslint-disable react-hooks/set-state-in-effect -- draining a queue by
+     definition has to react to `sending` flipping false; popping the next
+     item is the effect, not incidental state sync */
+  // Drains the queue once the in-flight send finishes. Runs one at a time:
+  // the queued call sets `sending` back to true almost immediately, which
+  // blocks this effect from firing again until that one's also done.
+  useEffect(() => {
+    if (sending || queue.length === 0) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    if (next.kind === "image") {
+      generateImage(next.text, null, next.imgs || []);
+    } else {
+      runChat({ text: next.text, imgs: next.imgs || [], docs: next.docs || [] });
+    }
+  }, [sending, queue]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const retryFailed = (index) => {
     const r = messages[index]?.retry;
@@ -939,9 +983,9 @@ export default function ChatPage() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !sending) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      onSend();
+      onSend(); // queues instead of sending if a reply is already streaming
     }
   };
 
@@ -1136,6 +1180,8 @@ export default function ChatPage() {
               sending={sending}
               onStop={stopGeneration}
               onSend={onSend}
+              queue={queue}
+              onRemoveQueued={removeQueued}
               fileInputRef={fileInputRef}
               onFilesSelected={handleFiles}
               fileAccept={(mode === "image"
