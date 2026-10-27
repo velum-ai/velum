@@ -184,14 +184,16 @@
   }
 }
 
-/* streamed reply text: a quick fade retriggered on every paint tick (see
-   MessageList.js) so new content reads as arriving, not just popping in */
+/* streamed reply text: a light shimmer retriggered on every paint tick (see
+   MessageList.js) so new content reads as arriving, not just popping in -
+   kept subtle on purpose, this is a small assist on top of a fast paint
+   cadence, not the thing doing the work of looking smooth */
 .stream-pulse {
-  animation: stream-pulse 0.3s ease-out both;
+  animation: stream-pulse 0.15s ease-out both;
 }
 @keyframes stream-pulse {
   from {
-    opacity: 0.45;
+    opacity: 0.85;
   }
   to {
     opacity: 1;

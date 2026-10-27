@@ -3,6 +3,9 @@ import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "privacy",
+  description:
+    "how velum handles data: no name, email, or phone required, chat content encrypted at rest, what payment processors see.",
+  alternates: { canonical: "/privacy" },
 };
 
 const points = [

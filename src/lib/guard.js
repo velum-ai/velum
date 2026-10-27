@@ -20,7 +20,16 @@ export async function guardRequest(
   { key, limit, windowMs, account, busy = "too many requests, try again later" },
 ) {
   const ip = clientIp(req);
-  const { allowed } = await checkRateLimit(`${key}:${ip}`, { limit, windowMs });
+  // Rate limit and account lookup hit different tables and don't depend on
+  // each other's result, so run them concurrently instead of back-to-back -
+  // saves one DB round trip of latency on every single request, ahead of
+  // the upstream model call. Rejection precedence is unchanged: rate limit
+  // still wins over an invalid account, same as the old sequential order.
+  const [{ allowed }, record] = await Promise.all([
+    checkRateLimit(`${key}:${ip}`, { limit, windowMs }),
+    account === undefined ? Promise.resolve(null) : findAccount(account),
+  ]);
+
   if (!allowed) {
     log("rate_limited", { key, ip });
     return { error: busy, status: 429 };
@@ -28,7 +37,6 @@ export async function guardRequest(
 
   if (account === undefined) return {};
 
-  const record = await findAccount(account);
   if (!record) return { error: "invalid account", status: 400 };
   return { record };
 }

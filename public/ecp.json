@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "site": {
+    "name": "velum",
+    "url": "https://velum.run",
+    "description": "chat with the best ai models without giving up your identity. no email, password, or username - a random 16-digit account number is the only identity. pay-as-you-go credits, no subscription.",
+    "logo": "https://velum.run/velum-logo-500.png"
+  },
+  "content": [
+    { "url": "https://velum.run/", "type": "homepage" },
+    { "url": "https://velum.run/pricing", "type": "pricing" },
+    { "url": "https://velum.run/faq", "type": "faq" },
+    { "url": "https://velum.run/privacy", "type": "policy" },
+    { "url": "https://velum.run/terms", "type": "policy" }
+  ],
+  "access": {
+    "crawlable": true,
+    "robotsTxt": "https://velum.run/robots.txt",
+    "sitemap": "https://velum.run/sitemap.xml"
+  },
+  "publicApi": false
+}

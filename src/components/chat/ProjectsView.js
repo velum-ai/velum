@@ -145,7 +145,7 @@ export default function ProjectsView({
           </div>
 
           {projectChats.length === 0 ? (
-            <p className="px-1 py-3 text-sm text-faint">
+            <p className="px-3 py-3 text-sm text-faint">
               no chats in this project yet.
             </p>
           ) : (
@@ -154,7 +154,7 @@ export default function ProjectsView({
                 <button
                   key={chat.id}
                   onClick={() => onSelectChat(chat)}
-                  className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left transition-colors hover:bg-surface"
+                  className="flex items-center justify-between gap-3 border-b border-border px-3 py-3 text-left transition-colors hover:bg-surface"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-foreground">

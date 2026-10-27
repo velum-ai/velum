@@ -1,0 +1,35 @@
+# velum
+
+> chat with the best ai models without giving up your identity. no email,
+> password, or username - signing up generates a random 16-digit account
+> number, which is both the only identity and the only way back in. credit
+> is bought up front (100 credits = $1.00) and billed per token actually
+> used, no subscription. the codebase is open source (AGPL-3.0) and
+> self-hostable.
+
+## Product
+
+- [Home](https://velum.run/): what velum is and how it works, start to
+  finish.
+- [Pricing](https://velum.run/pricing): per-model token rates and how
+  credits are billed.
+- [FAQ](https://velum.run/faq): billing, payment methods, model selection,
+  tool use (web search, code execution, image generation), data controls.
+
+## Capabilities
+
+- Chat with a curated set of models (OpenAI, Anthropic, Google, Meta, and
+  others) through OpenRouter, grouped by use case: efficient, flagship,
+  coding, vision, long context, and uncensored.
+- Models can automatically use tools mid-conversation: web search, fetching
+  a specific page, running Python in an isolated sandbox, and generating
+  images.
+- Chat content, titles, and custom instructions are encrypted at rest with
+  a separate key per account.
+- Payment via card, Apple Pay, Google Pay, and bank transfer (no processor
+  sees chat content); Monero support is planned.
+
+## Policies
+
+- [Privacy](https://velum.run/privacy)
+- [Terms](https://velum.run/terms)

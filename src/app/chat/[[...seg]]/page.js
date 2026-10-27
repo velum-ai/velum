@@ -500,12 +500,14 @@ export default function ChatPage() {
         },
       ]);
     };
-    // Throttled well below the display's refresh rate on purpose: markdown
+    // Throttled below the display's refresh rate on purpose: markdown
     // re-renders by replacing the whole reply's HTML (see MessageList), so
-    // redoing that every single animation frame (60/s) gets visibly janky as
-    // a reply grows. ~12/s still reads as live streaming to the eye.
+    // redoing that every single animation frame (60/s) adds real re-render
+    // cost on a long reply. ~30/s is close enough to full frame rate to read
+    // as genuinely smooth (this is most of what makes ChatGPT/Claude-style
+    // streaming feel fluid - frequent small updates, not a fade effect).
     const paint = () => {
-      if (frame == null) frame = setTimeout(flush, 80);
+      if (frame == null) frame = setTimeout(flush, 32);
     };
 
     try {

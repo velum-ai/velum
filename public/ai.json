@@ -1,0 +1,18 @@
+{
+  "name": "velum",
+  "description": "chat with the best ai models without giving up your identity. no email, password, or username - a random 16-digit account number is the only identity. pay-as-you-go credits, no subscription.",
+  "url": "https://velum.run",
+  "logo": "https://velum.run/velum-logo-500.png",
+  "license": "AGPL-3.0",
+  "repository": "https://github.com/velum-ai/velum",
+  "sameAs": ["https://github.com/velum-ai/velum", "https://x.com/usevelum"],
+  "category": "AI chat application",
+  "pricingModel": "pay-as-you-go",
+  "keyPages": [
+    { "path": "/", "description": "what velum is and how it works, start to finish" },
+    { "path": "/pricing", "description": "per-model token pricing and how credits are billed" },
+    { "path": "/faq", "description": "billing, payment methods, model selection, tools, data controls" },
+    { "path": "/privacy", "description": "privacy policy" },
+    { "path": "/terms", "description": "terms of service" }
+  ]
+}

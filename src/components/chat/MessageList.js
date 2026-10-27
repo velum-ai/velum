@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { renderMarkdown } from "@/lib/markdown";
+import { renderMarkdown, renderMarkdownStreaming } from "@/lib/markdown";
 import { MODEL_LABELS } from "@/lib/pricing";
 import {
   CopyIcon,
@@ -104,10 +104,27 @@ function MessageRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
-  const html = useMemo(
-    () => (isUser ? null : renderMarkdown(msg.content)),
-    [isUser, msg.content],
-  );
+
+  // While streaming, re-rendering the whole reply from scratch on every
+  // paint tick gets more expensive as it grows. This cache (one per message
+  // row - the row remounts with a fresh instance once the message finalizes,
+  // see the `key` switch from "live" to a real id in the list below) lets
+  // renderMarkdownStreaming only re-render what's new since the last safe
+  // block boundary. Once streaming ends, the finalized row always goes
+  // through plain renderMarkdown instead - this cache never backs the
+  // stored/shared/exported view of a message, only the live one.
+  const streamCacheRef = useRef({ text: "", html: "" });
+  const html = useMemo(() => {
+    if (isUser) return null;
+    if (!streaming) return renderMarkdown(msg.content);
+    // Safe despite reading/writing a ref during render: renderMarkdownStreaming
+    // is idempotent for a given (text, cache-so-far) pair (proven by the
+    // chunk-size-independent convergence self-check in markdown.js), so a
+    // render that runs twice or gets discarded can't corrupt the cache -
+    // re-running it with the same inputs just reproduces the same output.
+    // eslint-disable-next-line react-hooks/refs
+    return renderMarkdownStreaming(msg.content, streamCacheRef.current);
+  }, [isUser, msg.content, streaming]);
 
   // Streamed text replaces its whole innerHTML on every paint tick (markdown
   // can't be patched incrementally), which pops in with no transition of its

@@ -61,6 +61,18 @@ export const viewport = {
 // Runs before first paint: apply the saved theme so there is no flash.
 const themeScript = `(function(){try{var t=localStorage.getItem('velum_theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}})();`;
 
+// Organization schema, so AI/search crawlers have a structured identity to
+// attribute content to beyond scraping the page text themselves.
+const orgSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: site.name,
+  url: site.url,
+  logo: `${site.url}/velum-logo-500.png`,
+  description: site.description,
+  sameAs: [site.github, site.twitter].filter(Boolean),
+};
+
 export default function RootLayout({ children }) {
   return (
     <html
@@ -70,6 +82,10 @@ export default function RootLayout({ children }) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
+        />
       </head>
       <body>
         <div className="flex min-h-screen flex-col">{children}</div>

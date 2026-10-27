@@ -10,7 +10,12 @@ import {
   MAX_OUTPUT,
 } from "@/lib/pricing";
 
-export const metadata = { title: "pricing" };
+export const metadata = {
+  title: "pricing",
+  description:
+    "pay-as-you-go credit, billed per token. per-model rates across efficient, flagship, coding, vision, long context, and uncensored tiers.",
+  alternates: { canonical: "/pricing" },
+};
 
 const pct = Math.round((MARGIN - 1) * 100);
 

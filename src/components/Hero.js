@@ -38,9 +38,11 @@ export default function Hero() {
           <Link href={signedIn ? "/chat" : "/create-account"} className={primary}>
             {signedIn ? "chat" : "get started"}
           </Link>
-          <Link href="/learn" className={secondary}>
-            learn more
-          </Link>
+          {!signedIn && (
+            <Link href="/login" className={secondary}>
+              login
+            </Link>
+          )}
         </div>
       </div>
     </section>

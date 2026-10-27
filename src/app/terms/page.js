@@ -3,6 +3,8 @@ import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "terms",
+  description: "the terms of service for using velum.",
+  alternates: { canonical: "/terms" },
 };
 
 const points = [

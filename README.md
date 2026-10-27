@@ -51,6 +51,11 @@ npm run db:wipe -- --yes
   (`src/lib/crypto.js`), a DB leak exposes ciphertext, not conversations
 - the account number is the only credential, masked in logs
 
+## roadmap
+
+- monero payments - self-hosted BTCPay + a Monero node, no processor in the loop
+- agentic desktop app
+
 ## contributing
 
 PRs welcome. `npm test && npm run lint` before you push.

@@ -3,6 +3,9 @@ import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "faq",
+  description:
+    "answers on billing, payment methods, model selection, tool use, encryption, and data controls.",
+  alternates: { canonical: "/faq" },
 };
 
 const questions = [
@@ -66,10 +69,27 @@ const questions = [
   },
 ];
 
+// Reuses the same `questions` array the page renders - one source of truth,
+// nothing to keep in sync by hand.
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: questions.map((q) => ({
+    "@type": "Question",
+    name: q.question,
+    acceptedAnswer: { "@type": "Answer", text: q.answer },
+  })),
+};
+
 export default function FAQPage() {
   return (
     <>
       <Header />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6 sm:py-16">
         <h1 className="text-2xl font-medium tracking-tight sm:text-4xl">faq</h1>
