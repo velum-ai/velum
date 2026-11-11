@@ -283,10 +283,12 @@ async function* toolLoopEvents({
   for (let i = 0; i <= MAX_TOOL_ROUNDS; i++) {
     let usage = null;
     let replyText = "";
+    let truncated = false;
     const toolCalls = [];
 
     for await (const ev of events) {
       if (ev.usage) usage = ev.usage;
+      if (ev.truncated) truncated = true;
       if (ev.toolCalls) {
         toolCalls.push(...ev.toolCalls);
         continue; // finish_reason=tool_calls ends the turn, nothing else to forward
@@ -300,7 +302,10 @@ async function* toolLoopEvents({
     totalPromptTokens += usage?.prompt_tokens || 0;
     totalCompletionTokens += usage?.completion_tokens || 0;
 
-    if (!toolCalls.length) break; // model answered normally, done
+    if (!toolCalls.length) {
+      if (truncated) yield { truncated: true };
+      break; // model answered normally, done
+    }
     toolRoundsUsed++;
 
     // Defense in depth: a provider quirk that yields the same tool_use id
@@ -442,9 +447,11 @@ async function* promptToolLoopEvents({ model, messages, maxOutput, signal, image
     let usage = null;
     let roundText = "";
     let rawCall = null;
+    let truncated = false;
 
     for await (const ev of chatEvents(res.body)) {
       if (ev.usage) usage = ev.usage;
+      if (ev.truncated) truncated = true;
       if (ev.reasoning) yield { reasoning: ev.reasoning };
       if (ev.delta) {
         roundText += ev.delta;
@@ -466,7 +473,10 @@ async function* promptToolLoopEvents({ model, messages, maxOutput, signal, image
     totalPromptTokens += usage?.prompt_tokens || 0;
     totalCompletionTokens += usage?.completion_tokens || 0;
 
-    if (!rawCall || !roundsLeft) break; // plain answer, or out of rounds - done
+    if (!rawCall || !roundsLeft) {
+      if (truncated) yield { truncated: true };
+      break; // plain answer, or out of rounds - done
+    }
 
     const call = parseToolCall(rawCall);
     if (!call) {

@@ -252,6 +252,12 @@ function MessageRow({
         )
       ) : null}
 
+      {!isUser && !streaming && msg.truncated && (
+        <p className="px-1 font-chat text-xs italic text-faint">
+          cut off - hit the reply length limit. ask it to continue for the rest.
+        </p>
+      )}
+
       {!streaming && !editing && !generating && (
         <div className="flex min-h-[1.75rem] items-center gap-1 px-1">
           {isUser ? (

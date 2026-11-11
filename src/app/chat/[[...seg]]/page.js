@@ -653,6 +653,7 @@ export default function ChatPage() {
           attachments: final.attachments?.length
             ? final.attachments
             : undefined,
+          truncated: final.truncated || undefined,
           cost: final.cost,
           model,
           id: final.messageId,

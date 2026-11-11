@@ -93,10 +93,12 @@ export function exchangeResponse({
       let reasoning = "";
       let usage = null;
       let toolSurcharge = 0;
+      let truncated = false;
       const toolFiles = [];
       try {
         for await (const ev of events) {
           if (ev.usage) usage = ev.usage;
+          if (ev.truncated) truncated = true;
           // billed per actual call, not deduped - the same tool can run
           // (and cost real provider money) more than once in one exchange
           if (ev.toolBilled) toolSurcharge += TOOL_CREDITS[ev.toolBilled]?.() || 0;
@@ -128,7 +130,13 @@ export function exchangeResponse({
 
       if (ephemeral) {
         const balance = await settleCredits(reservationId, actual);
-        send({ done: true, credits: balance, cost: actual, ephemeral: true });
+        send({
+          done: true,
+          credits: balance,
+          cost: actual,
+          ephemeral: true,
+          ...(truncated && { truncated: true }),
+        });
       } else {
         const result = await finalizeExchange({
           reservationId,
@@ -186,6 +194,7 @@ export function exchangeResponse({
           messageId: result.assistantMessageId,
           userMessageId: result.userMessageId,
           attachments,
+          ...(truncated && { truncated: true }),
         });
       }
 

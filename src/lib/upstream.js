@@ -79,6 +79,9 @@ async function* chatCompletionsEvents(body) {
       toolCallsSent = true;
       yield { toolCalls: toolCalls.filter(Boolean) };
     }
+    // The model had more to say but hit max_tokens - without surfacing this,
+    // a cut-off reply looks indistinguishable from a complete one.
+    if (choice?.finish_reason === "length") yield { truncated: true };
   }
 }
 
