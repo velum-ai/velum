@@ -37,11 +37,11 @@ export const MODELS = {
   // efficient: cheap and fast, fine for everyday use
   "openai/gpt-5.4-nano": { inUsd: 0.2, outUsd: 1.25, tier: "efficient", default: true },
   "google/gemini-2.5-flash-lite": { inUsd: 0.1, outUsd: 0.4, tier: "efficient", default: true },
-  "deepseek/deepseek-v4-flash": { inUsd: 0.14, outUsd: 0.28, tier: "efficient", default: true },
+  "deepseek/deepseek-v4-flash": { inUsd: 0.09, outUsd: 0.18, tier: "efficient", default: true },
   "openai/gpt-5.6-luna": { inUsd: 0.2, outUsd: 1.2, tier: "efficient", default: true },
-  "meta-llama/llama-3.3-70b-instruct": { inUsd: 0.1, outUsd: 0.32, tier: "efficient", default: true },
-  "mistralai/mistral-small-3.2-24b-instruct": { inUsd: 0.0938, outUsd: 0.25, tier: "efficient", default: false },
-  "qwen/qwen3-30b-a3b-instruct-2507": { inUsd: 0.0481, outUsd: 0.193, tier: "efficient", default: false },
+  "meta-llama/llama-3.3-70b-instruct": { inUsd: 0.71, outUsd: 0.71, tier: "efficient", default: true },
+  "mistralai/mistral-small-3.2-24b-instruct": { inUsd: 0.1, outUsd: 0.3, tier: "efficient", default: false },
+  "qwen/qwen3-30b-a3b-instruct-2507": { inUsd: 0.1, outUsd: 0.3, tier: "efficient", default: false },
   "google/gemma-3-27b-it": { inUsd: 0.08, outUsd: 0.45, tier: "efficient", default: false },
 
   // flagship: top quality, higher cost
@@ -55,9 +55,8 @@ export const MODELS = {
 
   // coding: built for or tuned on code
   "openai/gpt-5.3-codex": { inUsd: 1.75, outUsd: 14, tier: "coding", default: true },
-  "qwen/qwen3-coder-plus": { inUsd: 0.65, outUsd: 3.25, tier: "coding", default: true },
   "mistralai/codestral-2508": { inUsd: 0.3, outUsd: 0.9, tier: "coding", default: true },
-  "moonshotai/kimi-k2.7-code": { inUsd: 0.6562, outUsd: 3.3, tier: "coding", default: true },
+  "moonshotai/kimi-k2.7-code": { inUsd: 0.6, outUsd: 3.5, tier: "coding", default: true },
   "deepseek/deepseek-v4-pro": { inUsd: 0.9553, outUsd: 1.9105, tier: "coding", default: true },
   "openai/gpt-5.1-codex-mini": { inUsd: 0.25, outUsd: 2, tier: "coding", default: false },
   "qwen/qwen3-coder": { inUsd: 0.3, outUsd: 1, tier: "coding", default: false },
@@ -74,9 +73,9 @@ export const MODELS = {
 
   // longContext: very large context windows
   "x-ai/grok-4.20": { inUsd: 1.25, outUsd: 2.5, tier: "longContext", default: true },
-  "moonshotai/kimi-k3": { inUsd: 3, outUsd: 15, tier: "longContext", default: true },
+  "moonshotai/kimi-k3": { inUsd: 0.192, outUsd: 16, tier: "longContext", default: true },
   "qwen/qwen-plus": { inUsd: 0.26, outUsd: 0.78, tier: "longContext", default: true },
-  "z-ai/glm-5.3": { inUsd: 1.4, outUsd: 4.4, tier: "longContext", default: true },
+  "z-ai/glm-5.3": { inUsd: 0.0699, outUsd: 1.4, tier: "longContext", default: true },
   "thedrummer/unslopnemo-12b": { inUsd: 0.4, outUsd: 0.4, tier: "longContext", default: true },
   "mistralai/mistral-large-2512": { inUsd: 0.5, outUsd: 1.5, tier: "longContext", default: false },
   "x-ai/grok-4.3": { inUsd: 1.25, outUsd: 2.5, tier: "longContext", default: false },
@@ -84,10 +83,7 @@ export const MODELS = {
   // uncensored: minimal refusals, includes the Venice edition
   "cognitivecomputations/dolphin-mistral-24b-venice-edition": { inUsd: 0.2, outUsd: 0.9, tier: "uncensored", default: true },
   "nousresearch/hermes-4-405b": { inUsd: 1, outUsd: 3, tier: "uncensored", default: true },
-  "nousresearch/hermes-3-llama-3.1-70b": { inUsd: 0.7, outUsd: 0.7, tier: "uncensored", default: true },
-  "sao10k/l3.3-euryale-70b": { inUsd: 0.65, outUsd: 0.75, tier: "uncensored", default: true },
   "sao10k/l3-lunaris-8b": { inUsd: 0.04, outUsd: 0.05, tier: "uncensored", default: true },
-  "nousresearch/hermes-3-llama-3.1-405b": { inUsd: 1, outUsd: 1, tier: "uncensored", default: false },
   "thedrummer/cydonia-24b-v4.1": { inUsd: 0.3, outUsd: 0.5, tier: "uncensored", default: false },
 };
 
@@ -109,7 +105,6 @@ export const MODEL_LABELS = {
   "anthropic/claude-haiku-4.5": "claude haiku 4.5",
   "google/gemini-3.5-flash": "gemini 3.5 flash",
   "openai/gpt-5.3-codex": "gpt-5.3 codex",
-  "qwen/qwen3-coder-plus": "qwen3 coder plus",
   "mistralai/codestral-2508": "codestral",
   "moonshotai/kimi-k2.7-code": "kimi k2.7 code",
   "deepseek/deepseek-v4-pro": "deepseek v4 pro",
@@ -132,10 +127,7 @@ export const MODEL_LABELS = {
   "x-ai/grok-4.3": "grok 4.3",
   "cognitivecomputations/dolphin-mistral-24b-venice-edition": "dolphin (venice)",
   "nousresearch/hermes-4-405b": "hermes 4 405b",
-  "nousresearch/hermes-3-llama-3.1-70b": "hermes 3 70b",
-  "sao10k/l3.3-euryale-70b": "euryale 70b",
   "sao10k/l3-lunaris-8b": "lunaris 8b",
-  "nousresearch/hermes-3-llama-3.1-405b": "hermes 3 405b",
   "thedrummer/cydonia-24b-v4.1": "cydonia 24b",
 };
 
