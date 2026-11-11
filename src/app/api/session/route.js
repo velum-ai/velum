@@ -9,13 +9,28 @@ import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 // (even via the classic text/plain-body trick, invisible to them), would
 // get logged into whatever account number the attacker put in the body.
 // Every real browser sets Origin on a POST regardless of same-origin or
-// not, so reject anything that doesn't match this deploy's own origin;
-// only fall back to allowing when the header is absent entirely (very old
+// not, so reject anything that doesn't match this deploy's own host; only
+// fall back to allowing when the header is absent entirely (very old
 // browsers, non-browser API clients) - something a forged cross-site form
 // can't produce anyway.
+//
+// Compares HOST only, not the full origin: behind the reverse proxy this
+// app runs behind in production, Next sees a plain-HTTP internal
+// connection, so req.nextUrl's own scheme is unreliable (same reason
+// session.js's isHttps checks x-forwarded-proto instead of trusting it) -
+// comparing a "https://" Origin against a reconstructed "http://" origin
+// rejected every real login. The Host header itself is what the reverse
+// proxy actually forwards untouched, and the host is all a CSRF check
+// needs: an attacker's page can't fake a browser-set Origin header to
+// claim a host it isn't actually being served from.
 function isSameOrigin(req) {
   const origin = req.headers.get("origin");
-  return !origin || origin === req.nextUrl.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.get("host");
+  } catch {
+    return false;
+  }
 }
 
 // Login: the one place a client-supplied account number is still trusted
