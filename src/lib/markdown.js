@@ -1,12 +1,31 @@
+import katex from "katex";
+
 // Minimal, XSS-safe markdown -> HTML for assistant replies.
 //
 // SECURITY: the entire input is HTML-escaped BEFORE any formatting runs, and
 // this function only ever emits tags it generates itself (pre/code/strong/em/
-// h1-6/ul/li/br). There is NO raw-HTML passthrough and NO link syntax (avoids
-// the javascript: href vector). Safe to hand to dangerouslySetInnerHTML.
+// h1-6/ul/li/br), plus KaTeX's own output (see renderMath below - KaTeX never
+// interprets its input as HTML, so LaTeX source can't inject markup). There is
+// NO raw-HTML passthrough and NO link syntax (avoids the javascript: href
+// vector). Safe to hand to dangerouslySetInnerHTML.
 //
 // ponytail: deliberately covers only the markdown LLMs actually emit. Add
 // tables/links (with href sanitizing) only if a real need shows up.
+
+// Render one piece of LaTeX source to trusted HTML. KaTeX's output is safe
+// to splice in unescaped - it only ever emits its own fixed set of
+// span/math tags built from the parsed expression, never raw user HTML.
+// throwOnError:false makes a malformed expression render as an inline error
+// message instead of throwing and losing the rest of the reply.
+function renderMath(src, displayMode) {
+  try {
+    return katex.renderToString(src, { throwOnError: false, displayMode });
+  } catch {
+    // KaTeX itself failed outright (not just a parse error it could format) -
+    // fall back to the escaped source so at least nothing is lost or unsafe.
+    return `<code class="md-code">${escapeHtml(src)}</code>`;
+  }
+}
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
@@ -40,6 +59,29 @@ export function renderMarkdown(src) {
     return MARK + i + MARK;
   });
 
+  // 1b. Math, extracted the same way as code blocks (raw LaTeX source, never
+  // HTML-escaped - KaTeX needs the literal source, and its output is trusted
+  // HTML spliced back in verbatim at the end). Display before inline so a
+  // display span's own $ pair is never mistaken for two inline ones; \[ \]
+  // and \( \) before $ $ for the same reason within each pair, since \[ \]
+  // content may itself legitimately contain a lone $.
+  const extractMath = (re, displayMode) => {
+    out = out.replace(re, (_, src) => {
+      const i = blocks.length;
+      blocks.push(renderMath(src, displayMode));
+      return MARK + i + MARK;
+    });
+  };
+  extractMath(/\$\$([\s\S]+?)\$\$/g, true);
+  extractMath(/\\\[([\s\S]+?)\\\]/g, true);
+  extractMath(/\\\(([\s\S]+?)\\\)/g, false);
+  // Inline $...$: Pandoc's disambiguation rule, since plain prose saying
+  // "$5 and $10" must never be read as math spanning "5 and ". The opening $
+  // must be followed immediately by a non-space character, the closing $
+  // preceded immediately by a non-space character and not followed by a
+  // digit (so "$20,000 and $30,000" still safely stays as plain text).
+  extractMath(/\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g, false);
+
   // 2. Escape everything else.
   out = escapeHtml(out);
 
@@ -69,20 +111,34 @@ export function renderMarkdown(src) {
   return out;
 }
 
-// Ranges in `text` that must never be split inside: fully closed fenced code
-// blocks, plus a trailing unclosed fence (protected from its opening ``` to
-// the end of the string, since more of it is still streaming in).
-function protectedRanges(text) {
-  const ranges = [];
-  const re = /```([^\n]*)\n?([\s\S]*?)```/g;
+// A (possibly still-streaming) span protected the same way a fenced code
+// block is: every complete match of `re` is a protected range, and if a
+// trailing opener with no matching close exists after the last complete
+// match, it's protected from there to the end of the string (more of it is
+// still streaming in). `openStr` is the opener to search for past that point.
+function protectSpans(text, re, openStr, ranges) {
   let m;
   let lastEnd = 0;
+  re.lastIndex = 0;
   while ((m = re.exec(text))) {
     ranges.push([m.index, m.index + m[0].length]);
     lastEnd = m.index + m[0].length;
   }
-  const openIdx = text.indexOf("```", lastEnd);
+  const openIdx = text.indexOf(openStr, lastEnd);
   if (openIdx !== -1) ranges.push([openIdx, text.length]);
+}
+
+// Ranges in `text` that must never be split inside: fully closed fenced code
+// blocks or display-math spans, plus a trailing unclosed one of either
+// (protected from its opening to the end of the string, since more of it is
+// still streaming in). Inline math ($...$, \(...\)) never needs this: both
+// forms exclude newlines, so an incomplete one can't itself straddle the
+// blank-line gap lastSafeSplit looks for.
+function protectedRanges(text) {
+  const ranges = [];
+  protectSpans(text, /```([^\n]*)\n?([\s\S]*?)```/g, "```", ranges);
+  protectSpans(text, /\$\$([\s\S]+?)\$\$/g, "$$", ranges);
+  protectSpans(text, /\\\[([\s\S]+?)\\\]/g, "\\[", ranges);
   return ranges;
 }
 
@@ -158,6 +214,34 @@ if (process.argv[1] && process.argv[1].endsWith("markdown.js")) {
   assert.ok(mixed.includes("step 0 done"), mixed);
   assert.ok(mixed.includes("<pre"));
 
+  // math: inline, display, and the \( \) / \[ \] alternate delimiters all
+  // render through KaTeX, never leaking the raw $ / \( \[ markers
+  for (const src of ["$x = 1$", "$$x = 1$$", "\\(x = 1\\)", "\\[x = 1\\]"]) {
+    const html = renderMarkdown(src);
+    assert.ok(html.includes("katex"), `${src} -> ${html}`);
+    assert.ok(!html.includes("$"), `${src} -> ${html}`);
+  }
+  // display math renders with KaTeX's own display-mode wrapper
+  assert.ok(renderMarkdown("$$x = 1$$").includes("katex-display"));
+  assert.ok(!renderMarkdown("$x = 1$").includes("katex-display"));
+
+  // currency must never be misread as math: Pandoc's own disambiguation
+  // rule (no space touching either $, no digit right after the closing $)
+  for (const prose of [
+    "that costs $5 and $10 more",
+    "between $20,000 and $30,000",
+  ]) {
+    const html = renderMarkdown(prose);
+    assert.ok(!html.includes("katex"), `${prose} -> ${html}`);
+    assert.ok(html.includes("$5") || html.includes("$20,000"), html);
+  }
+  // a single stray $ (no closing one) is always left as plain text
+  assert.ok(!renderMarkdown("only one $ here").includes("katex"));
+
+  // malformed LaTeX degrades to a visible error/escaped fallback, never a
+  // thrown exception or a lost reply
+  assert.doesNotThrow(() => renderMarkdown("$\\frac{1$"));
+
   // renderMarkdownStreaming: fed in small chunks, must converge to exactly
   // what a plain renderMarkdown(fullText) call produces once all text has
   // arrived - this is the property the whole optimization depends on.
@@ -180,6 +264,8 @@ if (process.argv[1] && process.argv[1].endsWith("markdown.js")) {
     "intro\n\n```js\nfunction f() {\n\n  return 1;\n}\n```\n\noutro",
     "**bold** and `code` and # a header\n\nsecond paragraph with *italic* text.",
     "```\ncode with no language\nand a blank line\n\ninside it\n```",
+    "intro\n\n$$x = 1\n\ny = 2$$\n\noutro",
+    "price is $x = 1$ dollars and literally $5 too",
   ];
   for (const text of streamingCases) {
     for (const chunkSize of [1, 3, 7, 50]) {
@@ -194,6 +280,15 @@ if (process.argv[1] && process.argv[1].endsWith("markdown.js")) {
     const partial = renderMarkdownStreaming("intro\n\n```js\nconst x = '<script>'", cache);
     assert.ok(partial.includes("intro"));
     assert.ok(!partial.includes("<script>"));
+  }
+
+  // same, for a display-math block still streaming in with a blank line
+  // inside it: must not be cached as "settled" mid-expression
+  {
+    const cache = { text: "", html: "" };
+    renderMarkdownStreaming("intro\n\n$$x = 1\n\n", cache);
+    const full = renderMarkdownStreaming("intro\n\n$$x = 1\n\ny = 2$$\n\noutro", cache);
+    assert.strictEqual(full, renderMarkdown("intro\n\n$$x = 1\n\ny = 2$$\n\noutro"));
   }
 
   console.log("markdown.js self-check OK");
