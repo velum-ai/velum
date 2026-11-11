@@ -9,7 +9,17 @@ import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 // short-lived attachment links, so the DATABASE_URL-derived dev fallback
 // would mean a DB-connection-string leak also forges every account's
 // session. The fallback still exists for local dev convenience only.
-if (process.env.NODE_ENV === "production" && !process.env.APP_SECRET) {
+//
+// NEXT_PHASE excludes `next build` itself: Next sets NODE_ENV=production
+// for the build too, but the Docker `builder` stage runs it with zero
+// secrets present (same reason prisma.config.js can't eagerly require
+// DIRECT_URL either) - this must only fire for an actual running server
+// (`next start`) or a CLI script, never for compiling the bundle.
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build" &&
+  !process.env.APP_SECRET
+) {
   throw new Error(
     "APP_SECRET is required in production (generate one with `openssl rand -hex 32`) - " +
       "without it, session cookies and field encryption both fall back to a key derived " +

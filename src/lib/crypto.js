@@ -19,9 +19,14 @@ import {
 // account number folded into `info` (domain-separated from sign.js, which
 // HMACs URLs with the same secret, so the two uses share no key material).
 // Same dev fallback as sign.js: process-stable, rotates if DATABASE_URL
-// changes. Required in production - see sign.js's matching check, which
-// also derives from APP_SECRET and now backs session cookies too.
-if (process.env.NODE_ENV === "production" && !process.env.APP_SECRET) {
+// changes. Required in production - see sign.js's matching check (NEXT_PHASE
+// exclusion included for the same reason: `next build` itself runs with
+// NODE_ENV=production but no secrets present in the Docker builder stage).
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build" &&
+  !process.env.APP_SECRET
+) {
   throw new Error(
     "APP_SECRET is required in production (generate one with `openssl rand -hex 32`) - " +
       "without it, field encryption and session cookies both fall back to a key derived " +
