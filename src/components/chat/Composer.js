@@ -154,7 +154,7 @@ export default function Composer({
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-2">
           {(images.length > 0 || (!isImage && files.length > 0)) && (
-            <div className="flex flex-wrap gap-2 px-1 pt-1">
+            <div className="flex flex-wrap items-start gap-2 px-1 pt-1">
               {images.map((img, i) => (
                 <div key={`img-${i}`} className="relative">
                   {/* eslint-disable-next-line @next/next/no-img-element -- data: URIs */}
@@ -175,7 +175,7 @@ export default function Composer({
               {!isImage && files.map((f, i) => (
                 <div
                   key={`file-${i}`}
-                  className="flex h-16 max-w-[10rem] items-center gap-1.5 rounded-md border border-border px-2.5"
+                  className="flex max-w-[12rem] items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5"
                 >
                   <span className="shrink-0 text-faint">
                     <FileIcon />
@@ -186,7 +186,7 @@ export default function Composer({
                   <button
                     onClick={() => onRemoveFile(i)}
                     title="remove"
-                    className="ml-auto shrink-0 text-xs text-faint transition-colors hover:text-foreground"
+                    className="ml-1 shrink-0 text-xs text-faint transition-colors hover:text-foreground"
                   >
                     ×
                   </button>
