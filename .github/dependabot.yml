@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # npm packages - the main app
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # patch/minor bumps land together as one PR instead of a dozen; a
+      # major version (the kind likely to break something) still gets its
+      # own PR to review in isolation
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # actions used in ci.yml / deploy.yml (actions/checkout, setup-node, etc.)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # base image in the Dockerfile (node:26-slim)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

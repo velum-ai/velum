@@ -4,8 +4,18 @@ import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 // account number (attachment <img> src). The server mints a token bound to one
 // id; the attachment route verifies it and needs no other auth.
 //
-// APP_SECRET should be set in production. The fallback keeps dev working and is
-// still process-stable (derived from DATABASE_URL), but rotates if that changes.
+// APP_SECRET must be set in production: this now signs session cookies
+// (the account's sole login credential, 180-day lifetime), not just
+// short-lived attachment links, so the DATABASE_URL-derived dev fallback
+// would mean a DB-connection-string leak also forges every account's
+// session. The fallback still exists for local dev convenience only.
+if (process.env.NODE_ENV === "production" && !process.env.APP_SECRET) {
+  throw new Error(
+    "APP_SECRET is required in production (generate one with `openssl rand -hex 32`) - " +
+      "without it, session cookies and field encryption both fall back to a key derived " +
+      "from DATABASE_URL, which is far weaker than a real secret.",
+  );
+}
 const SECRET =
   process.env.APP_SECRET ||
   createHash("sha256")
