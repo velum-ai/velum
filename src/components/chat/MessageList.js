@@ -74,11 +74,14 @@ function CopyButton({ text }) {
 }
 
 function imagesOf(msg) {
-  if (msg.attachments?.length) {
-    return msg.attachments
-      .filter((a) => !a.mime || a.mime.startsWith("image/"))
-      .map((a) => ({ src: a.url, name: `${a.id}` }));
-  }
+  // A message can carry image attachments alongside non-image ones (e.g. an
+  // image + a PDF sent together) - filter for images rather than branching
+  // on `attachments` being present at all, or a non-image-only attachments
+  // array would hide the message's own `images`/`image` fallback below.
+  const fromAttachments = (msg.attachments || [])
+    .filter((a) => !a.mime || a.mime.startsWith("image/"))
+    .map((a) => ({ src: a.url, name: `${a.id}` }));
+  if (fromAttachments.length) return fromAttachments;
   if (msg.images?.length) return msg.images.map((src) => ({ src, name: "image" }));
   if (msg.image) return [{ src: msg.image, name: "image" }];
   return [];
@@ -172,9 +175,9 @@ function MessageRow({
 
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {files.map((f) => (
+          {files.map((f, j) => (
             <button
-              key={f.id}
+              key={f.id ?? j}
               onClick={() =>
                 onOpenDoc({ status: "ready", name: f.name || "file", url: f.url, mime: f.mime })
               }
