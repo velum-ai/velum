@@ -1,10 +1,17 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // One client per process. Cached on globalThis so dev hot-reload doesn't open a
 // new connection pool on every edit.
 const globalForPrisma = globalThis;
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+// Prisma 7 requires an explicit driver adapter - DATABASE_URL is Supabase's
+// "Transaction" pooler (port 6543, pgbouncer=true), the one built for many
+// short-lived workers sharing few real connections. Migrations/studio use
+// DIRECT_URL instead, configured separately in prisma.config.js.
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 

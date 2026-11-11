@@ -6,6 +6,7 @@
 //   npm run db:encrypt-existing            # show what would change
 //   npm run db:encrypt-existing -- --yes   # encrypt it
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { encryptText, decryptText } from "@/lib/crypto";
 
 const dbUrl = (() => {
@@ -20,7 +21,7 @@ const dbUrl = (() => {
   }
 })();
 
-const prisma = new PrismaClient({ datasourceUrl: dbUrl });
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }) });
 const commit = process.argv.includes("--yes");
 
 const isPlaintext = (value) => {

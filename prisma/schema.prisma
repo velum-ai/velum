@@ -5,11 +5,9 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // App runtime: Supabase "Transaction" pooler (port 6543), which multiplexes
-  // so many workers share few connections. Migrations need a real session, so
-  // they use DIRECT_URL (the "Session" pooler, port 5432). See README.
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // Prisma 7: connection URLs live outside the schema now. The CLI (migrate,
+  // studio) gets DIRECT_URL from prisma.config.js; the runtime client gets
+  // DATABASE_URL via the pg adapter in src/lib/prisma.js. See README.
 }
 
 /// A 16-digit anonymous number owning credits and chats - the only identity.

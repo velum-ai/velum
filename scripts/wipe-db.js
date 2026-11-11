@@ -8,6 +8,7 @@
 // Point DATABASE_URL at the database you mean to wipe. The host is printed
 // before anything happens.
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -25,7 +26,7 @@ const dbUrl = (() => {
   }
 })();
 
-const prisma = new PrismaClient({ datasourceUrl: dbUrl });
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }) });
 
 // Child rows first, then parents. TRUNCATE ... CASCADE would cover the order on
 // its own, but listing every table keeps this honest if a relation changes.

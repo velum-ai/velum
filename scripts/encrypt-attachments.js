@@ -9,6 +9,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { encryptBuffer, decryptBuffer } from "@/lib/crypto";
 import { attachmentExt } from "@/lib/storage";
 
@@ -24,7 +25,7 @@ const dbUrl = (() => {
   }
 })();
 
-const prisma = new PrismaClient({ datasourceUrl: dbUrl });
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }) });
 const commit = process.argv.includes("--yes");
 
 const DATA_DIR = process.env.DATA_DIR || "./.data";

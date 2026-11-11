@@ -1,5 +1,10 @@
 // Teaches plain `node` the `@/*` import alias (same one jsconfig.json / Next
 // use). Load it with:  node --import ./scripts/loader.mjs <file>
+//
+// Deliberately does NOT load .env - scripts/test.js relies on running with
+// no real secrets present, to exercise the "not configured" fallback paths
+// (see e.g. codeExec.js's self-check). Scripts that need real credentials
+// (DATABASE_URL, API keys) use scripts/loadEnv.mjs instead, see its comment.
 import { registerHooks } from "node:module";
 import { existsSync } from "node:fs";
 import path from "node:path";

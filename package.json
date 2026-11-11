@@ -20,32 +20,44 @@
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:sql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/full-schema.sql",
-    "db:wipe": "node --import ./scripts/loader.mjs scripts/wipe-db.js",
-    "db:encrypt-existing": "node --import ./scripts/loader.mjs scripts/encrypt-existing.js",
-    "db:encrypt-attachments": "node --import ./scripts/loader.mjs scripts/encrypt-attachments.js",
-    "db:migrate-per-account-keys": "node --import ./scripts/loader.mjs scripts/migrate-per-account-keys.js",
-    "create-account": "node --import ./scripts/loader.mjs scripts/create-account.js",
-    "grant-credit": "node --import ./scripts/loader.mjs scripts/grant-credit.js",
-    "delete-account": "node --import ./scripts/loader.mjs scripts/delete-account.js",
-    "sync-models": "node --import ./scripts/loader.mjs scripts/sync-models.js",
-    "import:legacy": "node --import ./scripts/loader.mjs scripts/import-legacy-json.js"
+    "db:wipe": "node --import ./scripts/loadEnv.mjs scripts/wipe-db.js",
+    "db:encrypt-existing": "node --import ./scripts/loadEnv.mjs scripts/encrypt-existing.js",
+    "db:encrypt-attachments": "node --import ./scripts/loadEnv.mjs scripts/encrypt-attachments.js",
+    "db:migrate-per-account-keys": "node --import ./scripts/loadEnv.mjs scripts/migrate-per-account-keys.js",
+    "db:encrypt-project-attachment-names": "node --import ./scripts/loadEnv.mjs scripts/encrypt-project-attachment-names.js",
+    "create-account": "node --import ./scripts/loadEnv.mjs scripts/create-account.js",
+    "grant-credit": "node --import ./scripts/loadEnv.mjs scripts/grant-credit.js",
+    "delete-account": "node --import ./scripts/loadEnv.mjs scripts/delete-account.js",
+    "sync-models": "node --import ./scripts/loadEnv.mjs scripts/sync-models.js",
+    "import:legacy": "node --import ./scripts/loadEnv.mjs scripts/import-legacy-json.js"
   },
   "dependencies": {
-    "@e2b/code-interpreter": "^2.8.0",
-    "@prisma/client": "6.19.3",
+    "@e2b/code-interpreter": "^2.9.1",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "dotenv": "^18.0.10",
     "highlight.js": "^11.12.0",
-    "next": "16.3.5",
+    "next": "^16.4.6",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^6.3.289",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "pg": "^8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.5",
     "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
-    "prisma": "6.19.3",
-    "tailwindcss": "^4"
+    "eslint": "^10.14.0",
+    "eslint-config-next": "^16.4.6",
+    "prisma": "^7.10.1",
+    "tailwindcss": "^4.3.5"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true,
+    "@prisma/engines@7.10.1": true,
+    "prisma@7.10.1": true
   }
 }
