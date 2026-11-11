@@ -13,13 +13,20 @@ const nextConfig = {
   // and make sure its prebuilt binary actually ships in the standalone build.
   serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
 
-  // ship the generated Prisma client + query engine, and pdf-parse's native
-  // binary, with the standalone bundle
+  // ship the generated Prisma client + query engine, pdf-parse's native
+  // binary, and pdfjs-dist's worker file with the standalone bundle. The
+  // worker is pdf-parse's own nested pdfjs-dist copy, not the top-level one -
+  // it's loaded via a dynamic import Next's standalone tracer can't see
+  // statically, so without this it silently gets pruned from the Docker
+  // image: works fine locally (full node_modules present), then every PDF
+  // upload fails in production with "Setting up fake worker failed: Cannot
+  // find module .../pdf.worker.mjs".
   outputFileTracingIncludes: {
     "/**": [
       "./node_modules/.prisma/client/**",
       "./node_modules/@prisma/client/**",
       "./node_modules/@napi-rs/canvas*/**",
+      "./node_modules/pdf-parse/node_modules/pdfjs-dist/**",
     ],
   },
   outputFileTracingExcludes: {
