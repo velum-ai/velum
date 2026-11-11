@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const FILES = [
   "sse.js",
-  "markdown.js",
+  "markdownPlugins.js",
   "pricing.js",
   "upstream.js",
   "sign.js",

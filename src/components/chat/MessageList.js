@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { renderMarkdown, renderMarkdownStreaming } from "@/lib/markdown";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { remarkPlugins, rehypePlugins, preprocessMath } from "@/lib/markdownPlugins";
 import { MODEL_LABELS } from "@/lib/pricing";
 import {
   CopyIcon,
@@ -73,6 +74,45 @@ function CopyButton({ text }) {
   );
 }
 
+// react-markdown's `pre` override - the only reliable way to style a fenced
+// code block distinctly from inline code (the two used to be told apart by
+// an `inline` prop react-markdown stopped providing; `pre` only ever wraps
+// a fenced block in the first place, so there's nothing to disambiguate -
+// inline `code` is left at its default tag and styled by plain CSS
+// targeting `.md-prose code` instead, see globals.css).
+function MarkdownPre({ children }) {
+  const codeEl = Array.isArray(children) ? children[0] : children;
+  const lang = /language-(\S+)/.exec(codeEl?.props?.className || "")?.[1] || "text";
+  const codeText = String(codeEl?.props?.children ?? "").replace(/\n$/, "");
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="md-cb">
+      <div className="md-cb-bar">
+        <span className="md-cb-lang">{lang}</span>
+        <button
+          type="button"
+          className="md-copy"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(codeText);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            } catch {
+              /* clipboard unavailable */
+            }
+          }}
+        >
+          {copied ? "copied" : "copy"}
+        </button>
+      </div>
+      <pre className="md-pre">{children}</pre>
+    </div>
+  );
+}
+
+const markdownComponents = { pre: MarkdownPre };
+
 function imagesOf(msg) {
   // A message can carry image attachments alongside non-image ones (e.g. an
   // image + a PDF sent together) - filter for images rather than branching
@@ -104,30 +144,10 @@ function MessageRow({
   onRetry,
   onZoom,
   onOpenDoc,
+  onContinue,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
-
-  // While streaming, re-rendering the whole reply from scratch on every
-  // paint tick gets more expensive as it grows. This cache (one per message
-  // row - the row remounts with a fresh instance once the message finalizes,
-  // see the `key` switch from "live" to a real id in the list below) lets
-  // renderMarkdownStreaming only re-render what's new since the last safe
-  // block boundary. Once streaming ends, the finalized row always goes
-  // through plain renderMarkdown instead - this cache never backs the
-  // stored/shared/exported view of a message, only the live one.
-  const streamCacheRef = useRef({ text: "", html: "" });
-  const html = useMemo(() => {
-    if (isUser) return null;
-    if (!streaming) return renderMarkdown(msg.content);
-    // Safe despite reading/writing a ref during render: renderMarkdownStreaming
-    // is idempotent for a given (text, cache-so-far) pair (proven by the
-    // chunk-size-independent convergence self-check in markdown.js), so a
-    // render that runs twice or gets discarded can't corrupt the cache -
-    // re-running it with the same inputs just reproduces the same output.
-    // eslint-disable-next-line react-hooks/refs
-    return renderMarkdownStreaming(msg.content, streamCacheRef.current);
-  }, [isUser, msg.content, streaming]);
 
   // Streamed text replaces its whole innerHTML on every paint tick (markdown
   // can't be patched incrementally), which pops in with no transition of its
@@ -244,18 +264,32 @@ function MessageRow({
             {msg.content}
           </div>
         ) : (
-          <div
-            ref={contentRef}
-            className="md-prose w-full max-w-none"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          <div ref={contentRef} className="md-prose w-full max-w-none">
+            <ReactMarkdown
+              remarkPlugins={remarkPlugins}
+              rehypePlugins={rehypePlugins}
+              components={markdownComponents}
+            >
+              {preprocessMath(msg.content)}
+            </ReactMarkdown>
+          </div>
         )
       ) : null}
 
       {!isUser && !streaming && msg.truncated && (
-        <p className="px-1 font-chat text-xs italic text-faint">
-          cut off - hit the reply length limit. ask it to continue for the rest.
-        </p>
+        <div className="flex items-center gap-2 px-1">
+          <p className="font-chat text-xs italic text-faint">
+            cut off - hit the reply length limit.
+          </p>
+          {onContinue && (
+            <button
+              onClick={() => onContinue(msg)}
+              className="rounded-md border border-border px-2 py-0.5 font-chat text-xs text-muted transition-colors hover:border-border-strong hover:text-foreground"
+            >
+              continue
+            </button>
+          )}
+        </div>
       )}
 
       {!streaming && !editing && !generating && (
@@ -347,6 +381,7 @@ export default function MessageList({
   onEditMessage,
   onRetryFailed,
   onOpenDoc,
+  onContinue,
 }) {
   const scrollRef = useRef(null);
   const stick = useRef(true);
@@ -390,32 +425,6 @@ export default function MessageList({
     stick.current = true;
     toBottom("auto");
   }, [activeChatId]);
-
-  // one delegated handler for every code-block copy button
-  useEffect(() => {
-    const root = scrollRef.current;
-    if (!root) return;
-    const onClick = async (e) => {
-      const btn = e.target.closest(".md-copy");
-      if (!btn || btn.dataset.busy) return;
-      const pre = btn.closest(".md-cb")?.querySelector("pre");
-      if (!pre) return;
-      try {
-        await navigator.clipboard.writeText(pre.innerText);
-      } catch {
-        return;
-      }
-      btn.dataset.busy = "1";
-      const original = btn.textContent;
-      btn.textContent = "copied";
-      setTimeout(() => {
-        btn.textContent = original;
-        delete btn.dataset.busy;
-      }, 1500);
-    };
-    root.addEventListener("click", onClick);
-    return () => root.removeEventListener("click", onClick);
-  }, []);
 
   if (loading && messages.length === 0) return <MessageSkeleton />;
 
@@ -490,6 +499,7 @@ export default function MessageList({
                 generating={!!msg.generating}
                 onZoom={(items, index) => setZoom({ items, index })}
                 onOpenDoc={onOpenDoc}
+                onContinue={!sending ? onContinue : null}
                 onRegenerate={
                   !sending && i === lastAssistant && onRegenerate
                     ? () => onRegenerate(i)

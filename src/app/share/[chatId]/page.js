@@ -1,15 +1,25 @@
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getSharedChat } from "@/lib/account";
 import { decorateChatAttachments } from "@/lib/attachmentUrl";
-import { renderMarkdown } from "@/lib/markdown";
+import { remarkPlugins, rehypePlugins, preprocessMath } from "@/lib/markdownPlugins";
 
 export const metadata = { title: "shared chat" };
 
+// No copy-button chrome here (unlike MessageList's richer `pre` override) -
+// this is a plain server component with no client-side interactivity at
+// all, and the old renderer's version of this button never actually worked
+// here either (its click handler lived only in MessageList.js's own
+// client-side effect, never wired up on this page).
+function SharedPre({ children }) {
+  return <pre className="md-pre">{children}</pre>;
+}
+const sharedMarkdownComponents = { pre: SharedPre };
+
 function Bubble({ msg }) {
   const isUser = msg.role === "user";
-  const html = isUser ? null : renderMarkdown(msg.content);
 
   return (
     <div className={`flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
@@ -36,10 +46,15 @@ function Bubble({ msg }) {
           {msg.content}
         </div>
       ) : (
-        <div
-          className="md-prose w-full max-w-none"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
+        <div className="md-prose w-full max-w-none">
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+            components={sharedMarkdownComponents}
+          >
+            {preprocessMath(msg.content)}
+          </ReactMarkdown>
+        </div>
       )}
     </div>
   );
