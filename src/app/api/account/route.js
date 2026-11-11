@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAccount, updateSystemPrompt, updateEnabledModels } from "@/lib/account";
 import { guardRequest, bad } from "@/lib/guard";
 import { checkRateLimit, clientIp } from "@/lib/rateLimit";
+import { setSessionCookie } from "@/lib/session";
 import { maskAccount } from "@/lib/mask";
 import { log } from "@/lib/logger";
 
@@ -28,7 +29,9 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   const account = await createAccount(body.number);
   log("account_created", { account: maskAccount(account) });
-  return NextResponse.json({ account });
+  const res = NextResponse.json({ account });
+  setSessionCookie(req, res, account);
+  return res;
 }
 
 // Update custom instructions (system prompt) or the account's model picks.
@@ -38,13 +41,13 @@ export async function PATCH(req) {
     key: "account-patch",
     limit: 30,
     windowMs: 60_000,
-    account: body.account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
 
   const result = Array.isArray(body.enabledModels)
-    ? await updateEnabledModels(body.account, body.enabledModels)
-    : await updateSystemPrompt(body.account, body.systemPrompt);
+    ? await updateEnabledModels(g.record.number, body.enabledModels)
+    : await updateSystemPrompt(g.record.number, body.systemPrompt);
 
   return result ? NextResponse.json(result) : bad("invalid request", 400);
 }

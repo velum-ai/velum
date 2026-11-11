@@ -18,16 +18,15 @@ import { guardRequest, bad } from "@/lib/guard";
 // catalogue's defaults). The chat route independently re-checks isAllowedModel,
 // so this is a UI filter, not the enforcement point.
 export async function POST(req) {
-  const { account } = await req.json().catch(() => ({}));
   const g = await guardRequest(req, {
     key: "models",
     limit: 30,
     windowMs: 60_000,
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
 
-  const enabled = await resolveEnabledModels(account);
+  const enabled = await resolveEnabledModels(g.record.number);
   if (!enabled) return bad("invalid account", 400);
 
   const models = enabled

@@ -14,7 +14,7 @@ import { site } from "@/config/site";
 // Either way we record a pending Payment row before redirecting the browser;
 // the webhook / return-url verify grants the credits on success.
 export async function POST(req) {
-  const { account, credits, method: rawMethod } = await req.json().catch(() => ({}));
+  const { credits, method: rawMethod } = await req.json().catch(() => ({}));
   const method = rawMethod === "btcpay" ? "BTCPAY" : "DODO";
 
   if (method === "BTCPAY" ? !btcpayConfigured() : !dodoConfigured()) {
@@ -25,9 +25,10 @@ export async function POST(req) {
     key: "payments",
     limit: 10,
     windowMs: 60 * 60_000, // 10 / hour / ip
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const account = g.record.number;
 
   const n = Number(credits);
   if (!isValidPurchase(n)) return bad("invalid amount", 400);

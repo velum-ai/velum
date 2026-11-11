@@ -95,16 +95,37 @@ const validFiles = (files) =>
 
 async function extractText(f) {
   const buffer = Buffer.from(f.url.split(",")[1], "base64");
-  if (f.url.startsWith("data:application/pdf")) {
-    const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: buffer });
+  if (!f.url.startsWith("data:application/pdf")) return buffer.toString("utf8");
+
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
     try {
       return (await parser.getText()).text;
-    } finally {
-      await parser.destroy();
+    } catch (wholeDocErr) {
+      // A single malformed/unusual page (dense vector content, embedded
+      // math, an unsupported glyph) can abort whole-document extraction
+      // even though every other page parses fine - seen with exports from
+      // note-taking apps. Retry page by page so one bad page costs only
+      // itself instead of losing the whole file.
+      const { total } = await parser.getInfo();
+      const parts = [];
+      let anyOk = false;
+      for (let page = 1; page <= total; page++) {
+        try {
+          const { text } = await parser.getText({ partial: [page] });
+          parts.push(text);
+          anyOk = true;
+        } catch {
+          parts.push(`[page ${page}: could not be read]`);
+        }
+      }
+      if (!anyOk) throw wholeDocErr;
+      return parts.join("\n");
     }
+  } finally {
+    await parser.destroy();
   }
-  return buffer.toString("utf8");
 }
 
 async function decodeFile(f) {
@@ -112,7 +133,7 @@ async function decodeFile(f) {
   try {
     text = await extractText(f);
   } catch (e) {
-    logError("file_extract_failed", e, { name: f.name });
+    logError("file_extract_failed", e);
     text = "[could not read this file]";
   }
   return `[attached file: ${f.name}]\n${text.slice(0, MAX_FILE_TEXT_CHARS)}`;
@@ -517,7 +538,6 @@ export async function POST(req) {
   const body = await req.json().catch(() => null);
   if (!body) return bad("invalid request", 400);
   const {
-    account,
     chatId,
     message,
     model: bodyModel,
@@ -533,9 +553,10 @@ export async function POST(req) {
     key: "chat",
     limit: 30,
     windowMs: 60_000,
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const account = g.record.number;
 
   const perAccount = await checkRateLimit(`chat-acct:${account}`, {
     limit: 40,

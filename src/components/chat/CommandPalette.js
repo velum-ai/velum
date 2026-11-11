@@ -40,7 +40,7 @@ export default function CommandPalette({
     if (!open || term.length < 2 || !account) return;
     const t = setTimeout(async () => {
       const myReq = ++searchReqRef.current;
-      const { ok, data } = await api("/api/search", { body: { account, q: term } });
+      const { ok, data } = await api("/api/search", { body: { q: term } });
       if (ok && Array.isArray(data.results) && searchReqRef.current === myReq) {
         setHits(data.results);
       }

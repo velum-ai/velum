@@ -7,7 +7,7 @@ import Footer from "@/components/Footer";
 import FullScreenNotice from "@/components/FullScreenNotice";
 import RedirectIfSignedIn from "@/components/RedirectIfSignedIn";
 import { api } from "@/lib/clientApi";
-import { STORAGE_KEY } from "@/lib/limits";
+import { SIGNED_IN_KEY } from "@/lib/limits";
 
 // The number shown before "continue" is only a local candidate, nothing is
 // created in the database until then, so an abandoned visit never leaves a
@@ -117,8 +117,10 @@ export default function CreateAccountPage() {
       return;
     }
 
-    localStorage.setItem(STORAGE_KEY, data.account);
+    // /api/account already set the session cookie on success - this flag is
+    // just a non-secret local hint so routing doesn't flash the login page.
     try {
+      localStorage.setItem(SIGNED_IN_KEY, "1");
       sessionStorage.removeItem(CANDIDATE_KEY);
     } catch {
       // storage blocked - harmless, nothing left to clean up

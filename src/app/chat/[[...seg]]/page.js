@@ -16,7 +16,7 @@ import DocPanel from "@/components/chat/DocPanel";
 import AttachmentsPanel from "@/components/chat/AttachmentsPanel";
 import {
   DEFAULT_MODEL,
-  STORAGE_KEY,
+  SIGNED_IN_KEY,
   MAX_IMAGES,
   MAX_IMAGE_BYTES,
   IMAGE_TYPES,
@@ -24,6 +24,7 @@ import {
   MAX_FILE_BYTES,
   FILE_TYPES,
 } from "@/lib/limits";
+import { migrateLegacySession } from "@/lib/ensureSession";
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i;
 
@@ -200,7 +201,7 @@ export default function ChatPage() {
         setFiles((prev) =>
           prev.length >= MAX_FILES
             ? prev
-            : [...prev, { name: file.name, url: reader.result }],
+            : [...prev, { name: file.name, url: reader.result, mime: file.type }],
         );
       };
       reader.readAsDataURL(file);
@@ -227,49 +228,65 @@ export default function ChatPage() {
     }
   };
 
-  const loadAccount = (stored) =>
-    api("/api/account/lookup", { body: { account: stored } }).then(
-      ({ data }) => {
-        if (typeof data.credits === "number") setCredits(data.credits);
-        if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
-        if (Array.isArray(data.projects)) setProjects(data.projects);
-        return data;
-      },
-    );
+  const loadAccount = () =>
+    api("/api/account/lookup", {}).then(({ data }) => {
+      if (typeof data.credits === "number") setCredits(data.credits);
+      if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
+      if (Array.isArray(data.projects)) setProjects(data.projects);
+      return data;
+    });
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    const stored = readLS(STORAGE_KEY, "");
-    if (!stored) {
-      router.push("/create-account");
-      return;
-    }
-    setAccount(stored);
+    // `cancelled` stops a superseded instance (e.g. React strict-mode's
+    // dev-only double effect) from acting - redirecting, setting state -
+    // after a newer one has already taken over.
+    let cancelled = false;
 
-    const pv = projectsPathInfo(window.location.pathname);
-    if (pv) {
-      setView("projects");
-      setActiveProjectId(pv.projectId);
-    }
+    (async () => {
+      let hadSession = false;
+      try {
+        hadSession = Boolean(localStorage.getItem(SIGNED_IN_KEY));
+      } catch {
+        hadSession = false;
+      }
+      if (!hadSession) hadSession = await migrateLegacySession();
+      if (cancelled) return;
 
-    // the URL wins over the remembered thread; either may be absent
-    const wanted = !pv
-      ? idFromPath(window.location.pathname) || readLS(LAST_CHAT_KEY, "")
-      : null;
-    if (!wanted) setBooting(false); // fresh chat: show the empty state now
+      if (!hadSession) {
+        router.push("/create-account");
+        return;
+      }
 
-    // one round trip: balance + chat list + the wanted thread's messages
-    api("/api/account/lookup", {
-      body: { account: stored, chatId: wanted || undefined },
-    })
-      .then(({ ok, status, data }) => {
+      const pv = projectsPathInfo(window.location.pathname);
+      if (pv) {
+        setView("projects");
+        setActiveProjectId(pv.projectId);
+      }
+
+      // the URL wins over the remembered thread; either may be absent
+      const wanted = !pv
+        ? idFromPath(window.location.pathname) || readLS(LAST_CHAT_KEY, "")
+        : null;
+      if (!wanted) setBooting(false); // fresh chat: show the empty state now
+
+      try {
+        // one round trip: balance + chat list + the wanted thread's messages
+        const { ok, status, data } = await api("/api/account/lookup", {
+          body: { chatId: wanted || undefined },
+        });
+        if (cancelled) return;
         if (!ok) {
-          if (status === 400) {
-            localStorage.removeItem(STORAGE_KEY);
+          if (status === 401) {
+            try {
+              localStorage.removeItem(SIGNED_IN_KEY);
+            } catch {
+              // storage blocked - redirecting below still works
+            }
             router.push("/login");
           }
           return;
         }
+        setAccount(data.account);
         if (typeof data.credits === "number") setCredits(data.credits);
         if (Array.isArray(data.chats)) setChats(sortChats(data.chats));
         if (Array.isArray(data.projects)) setProjects(data.projects);
@@ -283,23 +300,29 @@ export default function ChatPage() {
           if (wanted) writeLS(LAST_CHAT_KEY, ""); // stale / deleted
           syncUrl(null, true);
         }
-      })
-      .finally(() => setBooting(false));
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+
+      // models only need the now-confirmed session, not the raw number
+      api("/api/models", {}).then(({ data }) => {
+        if (cancelled) return;
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setModels(data.models);
+          setModel(pickDefaultModel(data.models));
+        }
+        if (data.maxOutput) setMaxOutput(data.maxOutput);
+        if (data.image) setImageInfo(data.image);
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   /* eslint-disable react-hooks/set-state-in-effect -- one-time restore from localStorage on mount */
   useEffect(() => {
-    const stored = readLS(STORAGE_KEY, "");
-    if (!stored) return;
-    api("/api/models", { body: { account: stored } }).then(({ data }) => {
-      if (Array.isArray(data.models) && data.models.length > 0) {
-        setModels(data.models);
-        setModel(pickDefaultModel(data.models));
-      }
-      if (data.maxOutput) setMaxOutput(data.maxOutput);
-      if (data.image) setImageInfo(data.image);
-    });
     if (readLS(SIDEBAR_KEY) === "hidden") setSidebarHidden(true);
     const savedWidth = Number(readLS(SIDEBAR_WIDTH_KEY));
     if (savedWidth >= 200 && savedWidth <= 420) setSidebarWidth(savedWidth);
@@ -371,13 +394,18 @@ export default function ChatPage() {
   };
 
   const signOut = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    api("/api/session", { method: "DELETE" });
+    try {
+      localStorage.removeItem(SIGNED_IN_KEY);
+    } catch {
+      // storage blocked - harmless, the cookie clear above still works
+    }
     clearDrafts();
     writeLS(LAST_CHAT_KEY, "");
     router.push("/login");
   };
 
-  const selectChat = async (chat, { push = true, acct = account } = {}) => {
+  const selectChat = async (chat, { push = true } = {}) => {
     streamTokenRef.current++;
     setView("chat");
     setEphemeral(false);
@@ -394,7 +422,7 @@ export default function ChatPage() {
     if (push) syncUrl(chat.id);
     try {
       const { ok, data } = await api("/api/chats", {
-        body: { account: acct, chatId: chat.id },
+        body: { chatId: chat.id },
       });
       if (ok && Array.isArray(data.messages)) setMessages(data.messages);
       if (ok && typeof data.shared === "boolean") setShared(data.shared);
@@ -419,7 +447,7 @@ export default function ChatPage() {
       if (!id) return startNewChat({ push: false });
       const known = chats.find((c) => c.id === id);
       if (known) return selectChat(known, { push: false });
-      api("/api/chats", { body: { account, chatId: id } }).then(
+      api("/api/chats", { body: { chatId: id } }).then(
         ({ ok, data }) => {
           if (ok && data.id) selectChat(data, { push: false });
           else startNewChat({ push: false });
@@ -457,7 +485,17 @@ export default function ChatPage() {
     if (appendUser) {
       base = [
         ...base,
-        { role: "user", content: text, ...(imgs.length && { images: imgs }) },
+        {
+          role: "user",
+          content: text,
+          ...(imgs.length && { images: imgs }),
+          // Non-image files never came back from the server into this local
+          // state at all (only the assistant's own attachments did) - the
+          // file chip only ever appeared after a full reload pulled the
+          // persisted message from the DB. Attach what we already have
+          // client-side so it shows immediately.
+          ...(docs.length && { attachments: docs }),
+        },
       ];
     }
     const startedAt = Date.now();
@@ -515,7 +553,6 @@ export default function ChatPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          account,
           chatId: ephemeral ? null : activeChatId,
           message: text,
           model,
@@ -653,7 +690,7 @@ export default function ChatPage() {
         if (isNewChat && targetProjectId) {
           api("/api/chats", {
             method: "PATCH",
-            body: { account, chatId: final.chatId, projectId: targetProjectId },
+            body: { chatId: final.chatId, projectId: targetProjectId },
           });
         }
       } else if (isCurrent()) {
@@ -681,7 +718,7 @@ export default function ChatPage() {
             },
           ]);
         }
-        if (account) loadAccount(account);
+        if (account) loadAccount();
       } else if (isCurrent()) {
         setMessages([
           ...base,
@@ -728,7 +765,6 @@ export default function ChatPage() {
     try {
       const { ok, status, data } = await api("/api/chat/image", {
         body: {
-          account,
           chatId: ephemeral ? null : activeChatId,
           prompt,
           ...(imgs.length && { images: imgs }),
@@ -909,7 +945,7 @@ export default function ChatPage() {
     );
     await api("/api/chats", {
       method: "PATCH",
-      body: { account, chatId, title },
+      body: { chatId, title },
     });
   };
 
@@ -919,7 +955,7 @@ export default function ChatPage() {
     );
     await api("/api/chats", {
       method: "PATCH",
-      body: { account, chatId, pinned },
+      body: { chatId, pinned },
     });
   };
 
@@ -929,14 +965,14 @@ export default function ChatPage() {
     setShared(next);
     await api("/api/chats", {
       method: "PATCH",
-      body: { account, chatId: activeChatId, shared: next },
+      body: { chatId: activeChatId, shared: next },
     });
   };
 
   const removeChat = async (chatId) => {
     setChats((prev) => prev.filter((c) => c.id !== chatId));
     if (chatId === activeChatId) startNewChat();
-    await api("/api/chats", { method: "DELETE", body: { account, chatId } });
+    await api("/api/chats", { method: "DELETE", body: { chatId } });
   };
 
   const createProject = async (name) => {
@@ -944,7 +980,7 @@ export default function ChatPage() {
     if (!clean) return;
     const { ok, data } = await api("/api/projects", {
       method: "POST",
-      body: { account, name: clean },
+      body: { name: clean },
     });
     if (ok) setProjects((prev) => [...prev, data]);
   };
@@ -957,7 +993,7 @@ export default function ChatPage() {
     );
     await api("/api/projects", {
       method: "PATCH",
-      body: { account, projectId, name: clean },
+      body: { projectId, name: clean },
     });
   };
 
@@ -970,7 +1006,7 @@ export default function ChatPage() {
     );
     await api("/api/projects", {
       method: "DELETE",
-      body: { account, projectId },
+      body: { projectId },
     });
   };
 
@@ -980,7 +1016,7 @@ export default function ChatPage() {
     );
     await api("/api/chats", {
       method: "PATCH",
-      body: { account, chatId, projectId },
+      body: { chatId, projectId },
     });
   };
 

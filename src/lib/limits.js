@@ -2,7 +2,17 @@
 // two sides can't drift.
 
 export const DEFAULT_MODEL = "openai/gpt-5.4-nano"; // cheapest priced tier
+
+// Pre-migration key: used to hold the raw account number itself, which is
+// now an httpOnly session cookie instead (see src/lib/session.js) - no JS
+// on the page can read it anymore. Kept only so useSignedIn can do a
+// one-time, transparent migration for anyone still signed in from before.
 export const STORAGE_KEY = "velum_account";
+// Non-secret: just "is there a session" for instant client-side routing
+// (avoiding a flash of the login page before an async check resolves).
+// Granting nothing by itself - every real request is still authenticated
+// server-side by the cookie regardless of what this says.
+export const SIGNED_IN_KEY = "velum_signed_in";
 
 export const MAX_IMAGES = 4;
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;

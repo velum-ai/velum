@@ -15,15 +15,16 @@ const INVOICE_ID = /^[A-Za-z0-9]{6,}$/;
 // Both funnel through the idempotent creditPayment(), so a slow or failed
 // call here only delays the UI, it never loses or double-grants credit.
 export async function POST(req) {
-  const { account, paymentId, btcpayInvoiceId } = await req.json().catch(() => ({}));
+  const { paymentId, btcpayInvoiceId } = await req.json().catch(() => ({}));
 
   const g = await guardRequest(req, {
     key: "payments-verify",
     limit: 20,
     windowMs: 60 * 60_000,
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const account = g.record.number;
 
   if (btcpayInvoiceId) return verifyBtcpay(account, btcpayInvoiceId);
   return verifyDodo(account, paymentId);

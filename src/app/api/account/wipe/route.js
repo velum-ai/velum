@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { wipeChats, deleteAccount } from "@/lib/account";
 import { guardRequest, bad } from "@/lib/guard";
+import { clearSessionCookie } from "@/lib/session";
 import { maskAccount } from "@/lib/mask";
 import { log } from "@/lib/logger";
 
@@ -12,17 +13,20 @@ export async function POST(req) {
     key: "account-wipe",
     limit: 6,
     windowMs: 60 * 60_000,
-    account: body.account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const number = g.record.number;
 
   if (body.target === "account") {
-    await deleteAccount(body.account);
-    log("account_deleted", { account: maskAccount(body.account) });
-    return NextResponse.json({ ok: true, target: "account" });
+    await deleteAccount(number);
+    log("account_deleted", { account: maskAccount(number) });
+    const res = NextResponse.json({ ok: true, target: "account" });
+    clearSessionCookie(req, res); // the account this cookie pointed at is gone
+    return res;
   }
 
-  const removed = await wipeChats(body.account);
-  log("chats_wiped", { account: maskAccount(body.account), removed });
+  const removed = await wipeChats(number);
+  log("chats_wiped", { account: maskAccount(number), removed });
   return NextResponse.json({ ok: true, target: "chats", removed });
 }

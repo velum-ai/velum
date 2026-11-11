@@ -31,15 +31,16 @@ export async function POST(req) {
 
   const body = await req.json().catch(() => null);
   if (!body) return bad("invalid request", 400);
-  const { account, chatId, prompt, images, ephemeral } = body;
+  const { chatId, prompt, images, ephemeral } = body;
 
   const g = await guardRequest(req, {
     key: "image",
     limit: 8,
     windowMs: 60_000,
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const account = g.record.number;
 
   const perAccount = await checkRateLimit(`image-acct:${account}`, {
     limit: 12,

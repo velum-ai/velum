@@ -15,7 +15,8 @@ import {
   TrashIcon,
 } from "@/components/chat/icons";
 import { api } from "@/lib/clientApi";
-import { STORAGE_KEY } from "@/lib/limits";
+import { SIGNED_IN_KEY } from "@/lib/limits";
+import { migrateLegacySession } from "@/lib/ensureSession";
 import { MODELS, MODEL_LABELS, TIERS, TIER_LABELS } from "@/lib/pricing";
 
 // Entirely client-fetched (account number lives in localStorage, never on the
@@ -140,7 +141,7 @@ export default function AccountPage() {
     const myReq = ++modelReqRef.current;
     const { ok, data: res } = await api("/api/account", {
       method: "PATCH",
-      body: { account, enabledModels: next },
+      body: { enabledModels: next },
     });
     if (ok && res.enabledModels && modelReqRef.current === myReq) {
       setData((d) => (d ? { ...d, enabledModels: res.enabledModels } : d));
@@ -149,30 +150,32 @@ export default function AccountPage() {
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      router.replace("/login");
-      return;
-    }
-    setAccount(stored);
-    fetch("/api/version")
-      .then((r) => r.json())
-      .then(setVersion)
-      .catch(() => {});
-    api("/api/account/overview", { body: { account: stored } }).then(({ ok, status, data }) => {
-      if (!ok) {
-        if (status === 400) {
-          localStorage.removeItem(STORAGE_KEY);
-          router.replace("/login");
-        }
+    (async () => {
+      let overview = await api("/api/account/overview", {});
+      if (!overview.ok && overview.status === 401) {
+        // might be a pre-cookie session with the number still in
+        // localStorage - migrate it once, then retry
+        const migrated = await migrateLegacySession();
+        if (migrated) overview = await api("/api/account/overview", {});
+      }
+      if (!overview.ok) {
+        router.replace("/login");
         return;
       }
+
+      const { data } = overview;
+      setAccount(data.number);
       setData((d) =>
         modelsEdited.current ? { ...data, enabledModels: d?.enabledModels } : data,
       );
       setPrompt(data.systemPrompt || "");
       setSavedPrompt(data.systemPrompt || "");
-    });
+    })();
+
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then(setVersion)
+      .catch(() => {});
 
     // returning from a checkout: ?payment_id=... (Dodo) or ?btcpay_invoice=... (BTCPay)
     const q = new URLSearchParams(window.location.search);
@@ -181,7 +184,7 @@ export default function AccountPage() {
     if (paymentId || btcpayInvoiceId) {
       window.history.replaceState({}, "", "/account");
       setBuying(true);
-      api("/api/payments/verify", { body: { account: stored, paymentId, btcpayInvoiceId } }).then(
+      api("/api/payments/verify", { body: { paymentId, btcpayInvoiceId } }).then(
         ({ ok, data }) => {
           setBuying(false);
           if (ok && data.ok) {
@@ -212,7 +215,7 @@ export default function AccountPage() {
     setPromptState("saving");
     const { ok, data: res } = await api("/api/account", {
       method: "PATCH",
-      body: { account, systemPrompt: prompt },
+      body: { systemPrompt: prompt },
     });
     if (ok) {
       setSavedPrompt(res.systemPrompt || "");
@@ -229,7 +232,7 @@ export default function AccountPage() {
     setAdded(0);
 
     const { ok, status, data } = await api("/api/payments", {
-      body: { account, credits, method },
+      body: { credits, method },
     });
     if (!ok || !data.checkoutUrl) {
       setBuying(false);
@@ -247,12 +250,18 @@ export default function AccountPage() {
   const runWipe = async () => {
     setBusy(true);
     const target = confirm;
-    const { ok } = await api("/api/account/wipe", { body: { account, target } });
+    const { ok } = await api("/api/account/wipe", { body: { target } });
     setBusy(false);
     setConfirm(null);
     if (!ok) return;
     if (target === "account") {
-      localStorage.removeItem(STORAGE_KEY);
+      // the route already cleared the session cookie - this is just the
+      // local routing hint
+      try {
+        localStorage.removeItem(SIGNED_IN_KEY);
+      } catch {
+        // storage blocked - harmless, the cookie is already gone server-side
+      }
       router.push("/");
     } else {
       setData((d) => (d ? { ...d, stats: { ...d.stats, chats: 0 } } : d));
@@ -263,11 +272,7 @@ export default function AccountPage() {
     if (!account) return;
     setExporting(true);
     try {
-      const res = await fetch("/api/account/export", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ account }),
-      });
+      const res = await fetch("/api/account/export", { method: "POST" });
       if (!res.ok) return;
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");

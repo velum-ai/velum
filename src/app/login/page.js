@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RedirectIfSignedIn from "@/components/RedirectIfSignedIn";
 import { api } from "@/lib/clientApi";
-import { STORAGE_KEY } from "@/lib/limits";
+import { SIGNED_IN_KEY } from "@/lib/limits";
 
 function formatAccountInput(value) {
   return (
@@ -33,8 +33,8 @@ export default function SignInPage() {
 
     setLoading(true);
 
-    const { ok, status } = await api("/api/account/lookup", {
-      body: { account: trimmed },
+    const { ok, status } = await api("/api/session", {
+      body: { number: trimmed },
     });
     setLoading(false);
 
@@ -49,7 +49,12 @@ export default function SignInPage() {
       return;
     }
 
-    localStorage.setItem(STORAGE_KEY, trimmed);
+    try {
+      localStorage.setItem(SIGNED_IN_KEY, "1");
+    } catch {
+      // storage blocked - the session cookie still works, just re-checks
+      // via the network each load instead of the instant local hint
+    }
     router.push("/chat");
   };
 

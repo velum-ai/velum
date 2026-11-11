@@ -8,24 +8,25 @@ import { decorateChatAttachments } from "@/lib/attachmentUrl";
 // messages, so the UI can render the real conversation on first paint instead
 // of flashing an empty screen and then swapping.
 export async function POST(req) {
-  const { account, chatId } = await req.json().catch(() => ({}));
+  const { chatId } = await req.json().catch(() => ({}));
   const g = await guardRequest(req, {
     key: "lookup-account",
     limit: 20,
     windowMs: 5 * 60_000,
     busy: "too many attempts, try again later",
-    account,
+    account: true,
   });
   if (g.error) return bad(g.error, g.status);
+  const number = g.record.number;
 
   const [chats, projects, chat] = await Promise.all([
-    listChats(account),
-    listProjects(account),
-    chatId ? getChat(account, chatId) : null,
+    listChats(number),
+    listProjects(number),
+    chatId ? getChat(number, chatId) : null,
   ]);
 
   return NextResponse.json({
-    account,
+    account: number,
     credits: g.record.credits,
     chats,
     projects,
