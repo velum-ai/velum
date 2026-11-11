@@ -539,6 +539,13 @@ async function* promptToolLoopEvents({ model, messages, maxOutput, signal, image
   };
 }
 
+// Sent as a one-off user turn when continuing a truncated reply, never
+// stored - getHistory/clientHistory already end with the existing assistant
+// message exactly as cut off, so this just tells the model what to do with
+// it rather than reconstructing the conversation some other way.
+const CONTINUE_NUDGE =
+  "The assistant message directly above this one is the full, complete context - it was cut off only by a token limit, nothing before it is missing or hidden from you. Continue writing from the exact word it stopped at, as if you were still mid-sentence. Do not say you can't see the earlier text, do not ask for it to be repeated, and do not restate, summarize, or re-explain anything already written anywhere above, even in different words - every sentence you output must be new. Do not add any preamble or acknowledgement - output only the continuation itself.";
+
 export async function POST(req) {
   if (!upstreamConfigured()) return bad("chat is not configured", 503);
   if (Number(req.headers.get("content-length") || 0) > MAX_REQUEST_BYTES) {
@@ -557,7 +564,11 @@ export async function POST(req) {
     history: clientHistory,
     truncateAfterId,
     appendUser: appendUserRaw,
+    continueMessageId: continueMessageIdRaw,
   } = body;
+  const continueMessageId = Number.isInteger(continueMessageIdRaw)
+    ? continueMessageIdRaw
+    : null;
 
   const g = await guardRequest(req, {
     key: "chat",
@@ -574,8 +585,14 @@ export async function POST(req) {
   });
   if (!perAccount.allowed) return bad("too many requests, try again later", 429);
 
-  const appendUser = appendUserRaw !== false; // default true; false = regenerate
+  // continue never adds a new user turn - it's picking back up on the
+  // existing assistant message named by continueMessageId
+  const appendUser = appendUserRaw !== false && !continueMessageId;
   const rewindTo = Number.isInteger(truncateAfterId) ? truncateAfterId : null;
+
+  if (continueMessageId && !ephemeral && !chatId) {
+    return bad("invalid account", 400);
+  }
 
   // uniform with account errors: don't leak which field was bad
   if (
@@ -650,6 +667,7 @@ export async function POST(req) {
     ...(systemPrompt ? [systemPrompt] : []),
     ...history.map((m) => m.content),
     ...(appendUser ? [messageText] : []),
+    ...(continueMessageId ? [CONTINUE_NUDGE] : []),
   ];
   const base = worstCaseCredits(model, promptParts.join("\n"));
   // Worst case is MAX_TOOL_ROUNDS + 1 full completion calls (each tool round
@@ -687,6 +705,7 @@ export async function POST(req) {
     ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
     ...history,
     ...(appendUser ? [{ role: "user", content: userContent }] : []),
+    ...(continueMessageId ? [{ role: "user", content: CONTINUE_NUDGE }] : []),
   ];
 
   const maxOutput = MAX_OUTPUT;
@@ -793,5 +812,6 @@ export async function POST(req) {
     events,
     appendUser,
     ephemeral: !!ephemeral,
+    continueMessageId,
   });
 }

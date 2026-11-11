@@ -352,6 +352,88 @@ export function finalizeExchange({
   }, TX_OPTS);
 }
 
+// Settle + append onto an EXISTING assistant message's content, instead of
+// creating a new row - for a "continue" request picking up a reply that got
+// cut off by the length limit. The user sees one seamless message grow, not
+// a second reply stitched on after it. messageId must be a real assistant
+// row in THIS account's chat - checking chat.accountId here (not just
+// chatId) matters: without it, a caller who already knows some other
+// account's chatId/messageId could get their own, differently-billed model
+// output written into a stranger's message. Anything that doesn't match
+// just no-ops to null, same defensive shape as the rest of this file's
+// "not found" returns.
+export function finalizeContinuation({
+  reservationId,
+  actual,
+  accountId,
+  chatId,
+  messageId,
+  appendedContent,
+  appendedReasoning,
+}) {
+  return prisma.$transaction(async (tx) => {
+    await applySettle(tx, reservationId, actual);
+
+    const existing = await tx.message.findFirst({
+      where: { id: messageId, chatId, role: "assistant", chat: { accountId } },
+      select: { content: true, reasoning: true, cost: true },
+    });
+    if (!existing) return null;
+
+    // A continuation is a fresh model turn, not a literal token-stream
+    // continuation - the model often restates the last few words right at
+    // the seam "just in case", despite being told not to. Trim the longest
+    // exact overlap between the end of what's already there and the start
+    // of the new text before joining, so that common case doesn't read as
+    // a stutter. (This can't catch a model repeating an EARLIER sentence
+    // further back - no cheap check covers that - but the seam itself is
+    // the overwhelmingly more common failure.)
+    const trimOverlap = (base, addition) => {
+      const max = Math.min(base.length, addition.length, 300);
+      for (let len = max; len >= 12; len--) {
+        if (base.slice(base.length - len) === addition.slice(0, len)) {
+          return addition.slice(len);
+        }
+      }
+      return addition;
+    };
+    const joinContinuation = (base, addition) =>
+      !base || !addition || /\s$/.test(base) || /^[\s.,;:!?)\]}'"-]/.test(addition)
+        ? base + addition
+        : `${base} ${addition}`;
+
+    const existingContent = safeDecrypt(accountId, existing.content);
+    const content = joinContinuation(
+      existingContent,
+      trimOverlap(existingContent, String(appendedContent ?? "")),
+    );
+    const reasoning = appendedReasoning
+      ? joinContinuation(safeDecrypt(accountId, existing.reasoning) || "", appendedReasoning)
+      : undefined;
+
+    await tx.message.update({
+      where: { id: messageId },
+      data: {
+        content: encryptText(accountId, content),
+        cost: (existing.cost || 0) + actual,
+        ...(reasoning !== undefined && { reasoning: encryptText(accountId, reasoning) }),
+      },
+    });
+
+    const { spent } = await tx.chat.update({
+      where: { id: chatId },
+      data: { spent: { increment: actual } },
+      select: { spent: true },
+    });
+    const { credits } = await tx.account.findUnique({
+      where: { number: accountId },
+      select: { credits: true },
+    });
+
+    return { balance: credits, chatId, spent, messageId };
+  }, TX_OPTS);
+}
+
 // Settle + persist one image-generation turn (user prompt + assistant marker).
 // The caller then saves the image as an Attachment on assistantMessageId.
 export function finalizeImageExchange({

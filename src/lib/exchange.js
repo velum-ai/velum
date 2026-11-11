@@ -1,4 +1,4 @@
-import { finalizeExchange, settleCredits } from "@/lib/account";
+import { finalizeExchange, finalizeContinuation, settleCredits } from "@/lib/account";
 import {
   usageToCredits,
   estimateInputTokens,
@@ -76,6 +76,7 @@ export function exchangeResponse({
   events,
   appendUser = true,
   ephemeral = false,
+  continueMessageId = null,
 }) {
   const encoder = new TextEncoder();
 
@@ -128,7 +129,41 @@ export function exchangeResponse({
           },
         ) + toolSurcharge;
 
-      if (ephemeral) {
+      if (continueMessageId && ephemeral) {
+        // Nothing persisted either way for an ephemeral chat - the client
+        // already holds the full message locally and just appends `reply`
+        // onto it, same as a normal ephemeral turn, just flagged as a merge.
+        const balance = await settleCredits(reservationId, actual);
+        send({
+          done: true,
+          credits: balance,
+          cost: actual,
+          ephemeral: true,
+          continued: true,
+          messageId: continueMessageId,
+          ...(truncated && { truncated: true }),
+        });
+      } else if (continueMessageId) {
+        const result = await finalizeContinuation({
+          reservationId,
+          actual,
+          accountId: account,
+          chatId,
+          messageId: continueMessageId,
+          appendedContent: reply,
+          appendedReasoning: reasoning || undefined,
+        });
+        send({
+          done: true,
+          credits: result?.balance,
+          cost: actual,
+          chatId: result?.chatId ?? chatId,
+          spent: result?.spent,
+          messageId: continueMessageId,
+          continued: true,
+          ...(truncated && { truncated: true }),
+        });
+      } else if (ephemeral) {
         const balance = await settleCredits(reservationId, actual);
         send({
           done: true,

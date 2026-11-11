@@ -38,6 +38,21 @@ const sortChats = (list) => [
   ...list.filter((c) => !c.pinned),
 ];
 
+// The markdown pipeline (remark/rehype/katex) re-parses the WHOLE reply from
+// scratch on every paint - unlike the old hand-rolled renderer, which had a
+// purpose-built incremental cache specifically to make this cheap. A fixed
+// 32ms throttle assumed that cheap re-render; for a long reply it no longer
+// is (measured ~56ms for a near-max-length reply), so the throttle interval
+// would end up behind the work it's gating instead of ahead of it. Scale the
+// interval up as content grows instead - still near-30fps early (when it's
+// genuinely cheap), coarser once there's enough text for re-parsing it every
+// tick to become the bottleneck.
+function paintDelay(len) {
+  if (len > 6000) return 300;
+  if (len > 2000) return 120;
+  return 32;
+}
+
 const HISTORY_CHAR_CAP = 24000;
 
 const DRAFT_PREFIX = "velum_draft:";
@@ -740,6 +755,149 @@ export default function ChatPage() {
     }
   };
 
+  // Picks up a reply that got cut off by the output-length limit (see
+  // MessageList's truncated note). Deliberately a separate, smaller sibling
+  // of runChat rather than another branch inside it: it merges new text
+  // onto an EXISTING message (same id) instead of appending a new one, and
+  // skips tool-activity visualization / the doc panel - a continuation is
+  // just "more of the same text", not a fresh exchange with its own tool
+  // calls to show progress for.
+  // A continuation is a fresh model turn, not a literal token-stream
+  // continuation - it has no idea whether the cut-off word needs a
+  // trailing space, and usually doesn't add one (see the matching helper
+  // in account.js, which applies the same fix to what actually gets
+  // persisted - this one is just so the live stream reads right too).
+  const joinContinuation = (base, addition) =>
+    !base || !addition || /\s$/.test(base) || /^[\s.,;:!?)\]}'"-]/.test(addition)
+      ? base + addition
+      : `${base} ${addition}`;
+
+  // Mirrors account.js's trim exactly, so the displayed message matches
+  // what's actually persisted - only applied once the full reply is known
+  // (not per-streamed-chunk), so a stutter can briefly flash by live and
+  // then correct itself the instant streaming finishes.
+  const trimOverlap = (base, addition) => {
+    const max = Math.min(base.length, addition.length, 300);
+    for (let len = max; len >= 12; len--) {
+      if (base.slice(base.length - len) === addition.slice(0, len)) {
+        return addition.slice(len);
+      }
+    }
+    return addition;
+  };
+
+  const continueReply = async (msg) => {
+    if (!account || sending) return;
+    const idx = messages.findIndex((m) => m === msg);
+    if (idx === -1) return;
+
+    const myToken = ++streamTokenRef.current;
+    const isCurrent = () => streamTokenRef.current === myToken;
+
+    const base = messages.slice(0, idx);
+    const baseContent = msg.content || "";
+    const baseReasoning = msg.reasoning || "";
+    const baseCost = msg.cost || 0;
+
+    setSending(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let acc = "";
+    let reason = "";
+    let frame = null;
+    const flush = () => {
+      frame = null;
+      if (!isCurrent()) return;
+      setMessages([
+        ...base,
+        {
+          ...msg,
+          content: joinContinuation(baseContent, acc),
+          reasoning: joinContinuation(baseReasoning, reason),
+          truncated: false,
+        },
+      ]);
+    };
+    const paint = () => {
+      if (frame == null) frame = setTimeout(flush, paintDelay(baseContent.length + acc.length));
+    };
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chatId: ephemeral ? null : activeChatId,
+          model: msg.model || model,
+          continueMessageId: msg.id,
+          ...(ephemeral && {
+            ephemeral: true,
+            history: messages
+              .slice(0, idx + 1)
+              .map((m) => ({ role: m.role, content: m.content })),
+          }),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        if (isCurrent()) setMessages([...base, msg]); // unchanged, just stop
+        return;
+      }
+
+      let final = null;
+      for await (const json of parseSSE(res.body)) {
+        if (json.reasoning) {
+          reason += json.reasoning;
+          paint();
+        }
+        if (json.delta) {
+          acc += json.delta;
+          paint();
+        }
+        if (json.done) final = json;
+      }
+      if (frame != null) clearTimeout(frame);
+      if (!isCurrent()) return;
+
+      const finalMsg = {
+        ...msg,
+        content: joinContinuation(baseContent, trimOverlap(baseContent, acc)),
+        reasoning: joinContinuation(baseReasoning, trimOverlap(baseReasoning, reason)) || null,
+        truncated: final?.truncated || undefined,
+        cost: baseCost + (final?.cost || 0),
+      };
+      setMessages([...base, finalMsg]);
+      if (final) {
+        setCredits(final.credits);
+        if (!ephemeral && final.chatId) {
+          setChats((prev) =>
+            sortChats(
+              prev.map((c) =>
+                c.id === final.chatId ? { ...c, spent: final.spent ?? c.spent } : c,
+              ),
+            ),
+          );
+        }
+      }
+    } catch {
+      if (isCurrent()) {
+        setMessages([
+          ...base,
+          {
+            ...msg,
+            content: joinContinuation(baseContent, trimOverlap(baseContent, acc)),
+            reasoning: joinContinuation(baseReasoning, trimOverlap(baseReasoning, reason)) || null,
+          },
+        ]);
+      }
+    } finally {
+      setSending(false);
+      abortRef.current = null;
+    }
+  };
+
   const generateImage = async (prompt, replaceFromIndex = null, imgs = []) => {
     if (!account || sending || outOfCredits || !prompt.trim()) return;
     const myToken = ++streamTokenRef.current;
@@ -1199,6 +1357,7 @@ export default function ChatPage() {
               onEditMessage={editMessage}
               onRetryFailed={retryFailed}
               onOpenDoc={setDocPanel}
+              onContinue={continueReply}
             />
 
             <Composer
