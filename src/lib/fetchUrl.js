@@ -92,20 +92,26 @@ export async function fetchUrl(rawUrl) {
       redirect: "manual",
     });
 
+  // Hostname only, never the full URL - path/query can carry user-specific
+  // or sensitive detail (a doc id, a token), and this is otherwise the only
+  // place fetch_url's actual target would reach stdout. The hostname alone
+  // is enough to notice "this site keeps failing" without logging what the
+  // user was actually looking at.
+  const hostname = new URL(rawUrl).hostname;
   let res;
   for (let hop = 0; ; hop++) {
     try {
       res = await call();
     } catch (err) {
       if (!isTransient(err)) {
-        logError("fetch_url_failed", err, { url: rawUrl });
+        logError("fetch_url_failed", err, { hostname });
         return "error: could not reach that url";
       }
       await wait(300);
       try {
         res = await call();
       } catch (err2) {
-        logError("fetch_url_failed", err2, { url: rawUrl });
+        logError("fetch_url_failed", err2, { hostname });
         return "error: could not reach that url";
       }
     }

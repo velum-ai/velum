@@ -31,6 +31,10 @@ const decMessage = (accountId, m) =>
     ...m,
     content: safeDecrypt(accountId, m.content),
     reasoning: safeDecrypt(accountId, m.reasoning),
+    attachments: m.attachments?.map((a) => ({
+      ...a,
+      name: safeDecrypt(accountId, a.name),
+    })),
   };
 const decChat = (accountId, c) => c && { ...c, title: safeDecrypt(accountId, c.title) };
 
@@ -452,17 +456,17 @@ export async function listProjects(number) {
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true },
   });
-  return projects;
+  return projects.map((p) => ({ ...p, name: safeDecrypt(number, p.name) }));
 }
 
 export async function createProject(number, name) {
   const clean = String(name ?? "").trim().slice(0, TITLE_MAX);
   if (!clean) return null;
   const project = await prisma.project.create({
-    data: { accountId: number, name: clean },
-    select: { id: true, name: true },
+    data: { accountId: number, name: encryptText(number, clean) },
+    select: { id: true },
   });
-  return project;
+  return { ...project, name: clean };
 }
 
 export async function renameProject(number, projectId, name) {
@@ -470,7 +474,7 @@ export async function renameProject(number, projectId, name) {
   if (!clean) return null;
   const { count } = await prisma.project.updateMany({
     where: { id: projectId, accountId: number },
-    data: { name: clean },
+    data: { name: encryptText(number, clean) },
   });
   return count ? { id: projectId, name: clean } : null;
 }

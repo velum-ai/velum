@@ -2,7 +2,7 @@ import { mkdir, writeFile, readFile, unlink, readdir } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { logError } from "@/lib/logger";
-import { encryptBuffer, decryptBuffer } from "@/lib/crypto";
+import { encryptBuffer, decryptBuffer, encryptText } from "@/lib/crypto";
 
 // Blob storage for chat images (uploads + generated). Rows live in Postgres,
 // bytes live on disk under DATA_DIR, encrypted with the same key as message
@@ -51,11 +51,15 @@ export async function saveAttachment({
       width,
       height,
       bytes: buffer.length,
-      name,
+      // name is free text (a tool's chosen output filename) - same class of
+      // content as a message, so it's encrypted like one. The row returned
+      // below swaps the ciphertext back for the plaintext the caller passed
+      // in, so saveAttachment's result is never itself a reason to decrypt.
+      name: encryptText(accountId, name),
     },
   });
   await writeFile(fileFor(row.id, mime), encryptBuffer(accountId, buffer));
-  return row;
+  return { ...row, name };
 }
 
 // Read one image by id. No auth here: the attachment route gates on a signed

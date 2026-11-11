@@ -42,15 +42,19 @@ async function braveFetch(query) {
 export async function searchText(query) {
   if (!searchConfigured() || !query) return "";
 
+  // Never log the query itself - it's user content, same as a chat message,
+  // and this is the one place in the app that otherwise never lets content
+  // reach stdout unmasked. The event name + status is enough to diagnose a
+  // dead provider; it doesn't need to say what anyone searched for.
   let res;
   try {
     res = await braveFetch(query);
   } catch (err) {
-    logError("web_search_failed", err, { query });
+    logError("web_search_failed", err);
     return "";
   }
   if (!res.ok) {
-    logError("web_search_failed", new Error(`brave search ${res.status}`), { query });
+    logError("web_search_failed", new Error(`brave search ${res.status}`));
     return "";
   }
 
